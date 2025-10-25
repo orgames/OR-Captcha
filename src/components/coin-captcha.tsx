@@ -20,7 +20,7 @@ import {
 import { validateUserCaptchaEntry } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, updateDoc, collection, addDoc, serverTimestamp, runTransaction, getDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, addDoc, serverTimestamp, runTransaction, getDoc, setDoc, increment } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
@@ -127,23 +127,16 @@ export default function CoinCaptcha() {
       type,
       timestamp: serverTimestamp(),
     };
+    
+    const userUpdate = setDoc(userRef, { coinBalance: increment(amount) }, { merge: true });
+    const transactionUpdate = setDoc(newTransactionRef, transactionData);
 
-    try {
-        await runTransaction(firestore, async (transaction) => {
-            const userDoc = await transaction.get(userRef);
-            if (!userDoc.exists()) {
-                throw "User document does not exist!";
-            }
-            const newBalance = (userDoc.data().coinBalance || 0) + amount;
-            transaction.update(userRef, { coinBalance: newBalance });
-            transaction.set(newTransactionRef, transactionData);
-        });
-    } catch (error: any) {
+    Promise.all([userUpdate, transactionUpdate]).catch((error) => {
         if (error.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
                 path: userRef.path,
                 operation: 'update',
-                requestResourceData: { coinBalance: '...atomic update' },
+                requestResourceData: { coinBalance: `increment(${amount})` },
             });
             errorEmitter.emit('permission-error', permissionError);
             const permissionError2 = new FirestorePermissionError({
@@ -160,7 +153,7 @@ export default function CoinCaptcha() {
                 variant: "destructive"
             });
         }
-    }
+    });
   };
 
 
