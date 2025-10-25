@@ -21,44 +21,59 @@ export function useUser(): UseUserReturn {
   const [loading, setLoading] = useState(true);
 
   const logout = useCallback(async () => {
-    await signOut(auth);
+    if (auth) {
+      await signOut(auth);
+    }
   }, [auth]);
 
   useEffect(() => {
+    if (!auth || !firestore) {
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        // Create or update user profile in Firestore
         const userRef = doc(firestore, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
         
-        const userData = {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-        };
+        try {
+          const userDoc = await getDoc(userRef);
+          
+          const userData = {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+          };
 
-        if (!userDoc.exists()) {
-          const data = { ...userData, coinBalance: 0 };
-          setDoc(userRef, data, { merge: true }).catch(async (serverError) => {
-            const permissionError = new FirestorePermissionError({
-              path: userRef.path,
-              operation: 'create',
-              requestResourceData: data,
-            }, auth.currentUser);
-            errorEmitter.emit('permission-error', permissionError);
-          });
-        } else {
-          setDoc(userRef, userData, { merge: true }).catch(async (serverError) => {
-             const permissionError = new FirestorePermissionError({
-              path: userRef.path,
-              operation: 'update',
-              requestResourceData: userData,
-            }, auth.currentUser);
-            errorEmitter.emit('permission-error', permissionError);
-          });
+          if (!userDoc.exists()) {
+            const data = { ...userData, coinBalance: 0 };
+            setDoc(userRef, data, { merge: true }).catch((serverError) => {
+              const permissionError = new FirestorePermissionError({
+                path: userRef.path,
+                operation: 'create',
+                requestResourceData: data,
+              }, auth.currentUser);
+              errorEmitter.emit('permission-error', permissionError);
+            });
+          } else {
+            setDoc(userRef, userData, { merge: true }).catch((serverError) => {
+               const permissionError = new FirestorePermissionError({
+                path: userRef.path,
+                operation: 'update',
+                requestResourceData: userData,
+              }, auth.currentUser);
+              errorEmitter.emit('permission-error', permissionError);
+            });
+          }
+        } catch (error) {
+          // This will catch errors from getDoc if it fails due to permissions
+           const permissionError = new FirestorePermissionError({
+            path: userRef.path,
+            operation: 'get',
+          }, auth.currentUser);
+          errorEmitter.emit('permission-error', permissionError);
         }
+
       }
       setLoading(false);
     });

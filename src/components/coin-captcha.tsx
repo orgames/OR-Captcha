@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useTransition } from "react";
+import { useState, useRef, useEffect, useTransition, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -19,10 +19,8 @@ import {
 } from "lucide-react";
 import { validateUserCaptchaEntry } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
-import { useUser } from "@/firebase";
-import { useFirestore } from "@/firebase";
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { useDoc } from "@/firebase";
+import { useUser, useFirestore, useDoc } from "@/firebase";
+import { doc, updateDoc, collection, addDoc, serverTimestamp, runTransaction, getDoc } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
@@ -46,7 +44,13 @@ const OraCoinReward = ({ className }: { className?: string }) => (
 export default function CoinCaptcha() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const { data: userProfile, loading: userProfileLoading } = useDoc<any>(`users/${user?.uid}`);
+
+  const userDocRef = useMemo(() => {
+    if (!user || !firestore) return null;
+    return doc(firestore, `users/${user.uid}`);
+  }, [user, firestore]);
+
+  const { data: userProfile, loading: userProfileLoading } = useDoc<any>(userDocRef?.path ?? `users/nouser`);
 
   const [userInput, setUserInput] = useState("");
   const [captchaText, setCaptchaText] = useState("");
@@ -112,34 +116,53 @@ export default function CoinCaptcha() {
   }, []);
 
   const addTransaction = async (amount: number, type: 'captcha' | 'ad') => {
-    if (!user) return;
+    if (!user || !firestore) return;
+    
+    const userRef = doc(firestore, 'users', user.uid);
+    const transactionsRef = collection(firestore, 'users', user.uid, 'transactions');
+    const newTransactionRef = doc(transactionsRef);
+
     const transactionData = {
       amount,
       type,
       timestamp: serverTimestamp(),
     };
-    const userRef = doc(firestore, 'users', user.uid);
-    const newBalance = (userProfile?.coinBalance || 0) + amount;
-    
-    updateDoc(userRef, { coinBalance: newBalance }).catch(async (serverError) => {
-      const permissionError = new FirestorePermissionError({
-        path: userRef.path,
-        operation: 'update',
-        requestResourceData: { coinBalance: newBalance },
-      });
-      errorEmitter.emit('permission-error', permissionError);
-    });
 
-    const transactionsRef = collection(firestore, 'users', user.uid, 'transactions');
-    addDoc(transactionsRef, transactionData).catch(async (serverError) => {
-       const permissionError = new FirestorePermissionError({
-        path: transactionsRef.path,
-        operation: 'create',
-        requestResourceData: transactionData,
-      });
-      errorEmitter.emit('permission-error', permissionError);
-    });
+    try {
+        await runTransaction(firestore, async (transaction) => {
+            const userDoc = await transaction.get(userRef);
+            if (!userDoc.exists()) {
+                throw "User document does not exist!";
+            }
+            const newBalance = (userDoc.data().coinBalance || 0) + amount;
+            transaction.update(userRef, { coinBalance: newBalance });
+            transaction.set(newTransactionRef, transactionData);
+        });
+    } catch (error: any) {
+        if (error.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+                path: userRef.path,
+                operation: 'update',
+                requestResourceData: { coinBalance: '...atomic update' },
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            const permissionError2 = new FirestorePermissionError({
+                path: newTransactionRef.path,
+                operation: 'create',
+                requestResourceData: transactionData
+            });
+            errorEmitter.emit('permission-error', permissionError2);
+        } else {
+            console.error("Transaction failed: ", error);
+            toast({
+                title: "An unexpected error occurred",
+                description: "Could not complete the transaction. Please try again.",
+                variant: "destructive"
+            });
+        }
+    }
   };
+
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -169,11 +192,12 @@ export default function CoinCaptcha() {
 
   const handleWatchAd = () => {
     if (isVerifying || isAdRunning || !user) return;
-    startAd(() => {
-      setTimeout(async () => {
-        await addTransaction(COINS_PER_AD, 'ad');
-        setAnimationTrigger(Date.now());
-      }, 3000);
+    startAd(async () => {
+       setTimeout(async () => {
+          await addTransaction(COINS_PER_AD, 'ad');
+          setAnimationTrigger(Date.now());
+          // Note: isAdRunning is automatically set to false after this async function completes.
+       }, 3000);
     });
   };
 
