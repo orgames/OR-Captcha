@@ -1,0 +1,80 @@
+"use client";
+
+import { useState, useEffect, useMemo } from 'react';
+import {
+  onSnapshot,
+  query,
+  collection,
+  where,
+  limit,
+  orderBy,
+  startAt,
+  endAt,
+  type Firestore,
+  type CollectionReference,
+  type DocumentData,
+  type Query,
+} from 'firebase/firestore';
+import { useFirestore } from '../provider';
+import { errorEmitter } from '../error-emitter';
+import { FirestorePermissionError } from '../errors';
+
+type QueryOptions = {
+  where?: [string, '==', any];
+  limit?: number;
+  orderBy?: [string, 'asc' | 'desc'];
+  startAt?: any;
+  endAt?: any;
+};
+
+export function useCollection<T extends DocumentData>(
+  path: string,
+  options?: QueryOptions
+): { data: T[] | null; loading: boolean } {
+  const firestore = useFirestore();
+  const [data, setData] = useState<T[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const collectionRef = useMemo(
+    () => collection(firestore, path),
+    [firestore, path]
+  );
+
+  const queryRef = useMemo(() => {
+    let q: Query = collectionRef;
+    if (options?.where) q = query(q, where(...options.where));
+    if (options?.orderBy) q = query(q, orderBy(...options.orderBy));
+    if (options?.startAt) q = query(q, startAt(options.startAt));
+    if (options?.endAt) q = query(q, endAt(options.endAt));
+    if (options?.limit) q = query(q, limit(options.limit));
+    return q;
+  }, [collectionRef, options]);
+
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      queryRef,
+      (snapshot) => {
+        const result: T[] = [];
+        snapshot.forEach((doc) => {
+          result.push({ id: doc.id, ...doc.data() } as T);
+        });
+        setData(result);
+        setLoading(false);
+      },
+      async (error) => {
+        const permissionError = new FirestorePermissionError({
+          path: collectionRef.path,
+          operation: 'list',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        console.error(`Error fetching collection ${path}:`, error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [queryRef, collectionRef.path]);
+
+  return { data, loading };
+}
