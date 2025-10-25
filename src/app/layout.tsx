@@ -3,8 +3,8 @@ import { Toaster } from "@/components/ui/toaster"
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Coin Captcha',
-  description: 'Earn rupees by solving captchas',
+  title: 'ORA Captcha',
+  description: 'Earn ORA coins by solving captchas',
 };
 
 export default function RootLayout({

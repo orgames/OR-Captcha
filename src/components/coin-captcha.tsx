@@ -12,7 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  IndianRupee,
   RefreshCw,
   Clapperboard,
   Loader2,
@@ -25,6 +24,19 @@ const CHARACTERS = "ABCDEFGHIJKLMNPQRSTUVWXYZ123456789";
 const CAPTCHA_LENGTH = 6;
 const COINS_PER_CAPTCHA = 10;
 const COINS_PER_AD = 25;
+
+const OraCoin = ({ className }: { className?: string }) => (
+    <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
+        <span className="text-lg font-bold text-accent-foreground">O</span>
+    </div>
+);
+
+const OraCoinReward = ({ className }: { className?: string }) => (
+    <div className={`w-12 h-12 rounded-full bg-accent flex items-center justify-center ${className}`}>
+        <span className="text-2xl font-bold text-accent-foreground">O</span>
+    </div>
+);
+
 
 export default function CoinCaptcha() {
   const [coinBalance, setCoinBalance] = useState(0);
@@ -137,11 +149,11 @@ export default function CoinCaptcha() {
         <div className="flex justify-between items-center">
           <div>
             <CardTitle className="font-headline">Your Balance</CardTitle>
-            <CardDescription>Rupees earned from tasks</CardDescription>
+            <CardDescription>ORA coins earned from tasks</CardDescription>
           </div>
           <div className="relative">
             <div className="flex items-center gap-2 bg-accent/30 text-accent-foreground p-2 rounded-lg">
-              <IndianRupee className="w-8 h-8 text-accent-foreground/80" />
+              <OraCoin className="w-8 h-8" />
               <span className="text-3xl font-bold font-headline">
                 {coinBalance}
               </span>
@@ -151,7 +163,7 @@ export default function CoinCaptcha() {
                 key={animationTrigger}
                 className="absolute inset-0 flex items-center justify-center"
               >
-                <IndianRupee className="w-12 h-12 text-accent animate-coin-reward" />
+                <OraCoinReward className="animate-coin-reward" />
               </div>
             )}
           </div>
@@ -198,7 +210,7 @@ export default function CoinCaptcha() {
               </>
             ) : (
               <>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Submit & Earn {COINS_PER_CAPTCHA} Rupees
+                <CheckCircle2 className="mr-2 h-4 w-4" /> Submit & Earn {COINS_PER_CAPTCHA} ORA
               </>
             )}
           </Button>
@@ -217,7 +229,7 @@ export default function CoinCaptcha() {
             </>
           ) : (
             <>
-              <Clapperboard className="mr-2 h-4 w-4" /> Watch Ad & Earn {COINS_PER_AD} Rupees
+              <Clapperboard className="mr-2 h-4 w-4" /> Watch Ad & Earn {COINS_PER_AD} ORA
             </>
           )}
         </Button>
