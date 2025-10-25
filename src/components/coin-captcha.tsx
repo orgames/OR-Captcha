@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  CircleDollarSign,
+  IndianRupee,
   RefreshCw,
   Clapperboard,
   Loader2,
@@ -137,11 +137,11 @@ export default function CoinCaptcha() {
         <div className="flex justify-between items-center">
           <div>
             <CardTitle className="font-headline">Your Balance</CardTitle>
-            <CardDescription>Coins earned from tasks</CardDescription>
+            <CardDescription>Rupees earned from tasks</CardDescription>
           </div>
           <div className="relative">
             <div className="flex items-center gap-2 bg-accent/30 text-accent-foreground p-2 rounded-lg">
-              <CircleDollarSign className="w-8 h-8 text-accent-foreground/80" />
+              <IndianRupee className="w-8 h-8 text-accent-foreground/80" />
               <span className="text-3xl font-bold font-headline">
                 {coinBalance}
               </span>
@@ -151,7 +151,7 @@ export default function CoinCaptcha() {
                 key={animationTrigger}
                 className="absolute inset-0 flex items-center justify-center"
               >
-                <CircleDollarSign className="w-12 h-12 text-accent animate-coin-reward" />
+                <IndianRupee className="w-12 h-12 text-accent animate-coin-reward" />
               </div>
             )}
           </div>
@@ -198,7 +198,7 @@ export default function CoinCaptcha() {
               </>
             ) : (
               <>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Submit & Earn {COINS_PER_CAPTCHA} Coins
+                <CheckCircle2 className="mr-2 h-4 w-4" /> Submit & Earn {COINS_PER_CAPTCHA} Rupees
               </>
             )}
           </Button>
@@ -217,7 +217,7 @@ export default function CoinCaptcha() {
             </>
           ) : (
             <>
-              <Clapperboard className="mr-2 h-4 w-4" /> Watch Ad & Earn {COINS_PER_AD} Coins
+              <Clapperboard className="mr-2 h-4 w-4" /> Watch Ad & Earn {COINS_PER_AD} Rupees
             </>
           )}
         </Button>

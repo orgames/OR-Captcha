@@ -4,7 +4,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Coin Captcha',
-  description: 'Earn coins by solving captchas',
+  description: 'Earn rupees by solving captchas',
 };
 
 export default function RootLayout({
