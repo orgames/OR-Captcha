@@ -8,7 +8,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
-import { useAuth } from "@/firebase/auth/use-user";
+import { useAuth } from "@/firebase";
 import { Button } from "@/components/ui/button";
 import {
   Card,
