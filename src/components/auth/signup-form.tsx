@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { useAuth } from "@/firebase";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
-export function LoginForm() {
+export function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -26,18 +26,18 @@ export function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth) return;
 
     startTransition(async () => {
       try {
-        await signInWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(auth, email, password);
         router.push("/");
       } catch (error: any) {
         toast({
           variant: "destructive",
-          title: "Login Failed",
+          title: "Sign Up Failed",
           description: error.message,
         });
       }
@@ -47,13 +47,13 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
-        <CardTitle>Sign In</CardTitle>
+        <CardTitle>Sign Up</CardTitle>
         <CardDescription>
-          Enter your email and password to access your account.
+          Create an account to start earning ORA coins.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <form onSubmit={handleLogin} className="grid gap-4">
+        <form onSubmit={handleSignUp} className="grid gap-4">
           <Input
             type="email"
             placeholder="m@example.com"
@@ -72,7 +72,7 @@ export function LoginForm() {
           />
           <Button type="submit" className="w-full" disabled={isPending}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Sign In
+            Sign Up
           </Button>
         </form>
       </CardContent>
