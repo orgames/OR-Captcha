@@ -46,9 +46,7 @@ const validateCaptchaEntryPrompt = ai.definePrompt({
 Captcha Image: {{media url=captchaImage}}
 User Entry: {{{userEntry}}}
 
-Based on the image, determine if the User Entry matches the Captcha shown in the image. Return true if it matches, false otherwise. Return ONLY a JSON format. Focus on character recognition, not on image content. The output must conform to the following schema: ${JSON.stringify(
-    ai.getJsonSchema(ValidateCaptchaEntryOutputSchema)
-  )}`,
+Based on the image, determine if the User Entry matches the Captcha shown in the image. Return true if it matches, false otherwise. Return ONLY a JSON format. Focus on character recognition, not on image content.`,
 });
 
 const validateCaptchaEntryFlow = ai.defineFlow(
