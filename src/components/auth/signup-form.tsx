@@ -33,7 +33,7 @@ export function SignupForm() {
     startTransition(async () => {
       try {
         await createUserWithEmailAndPassword(auth, email, password);
-        router.push("/");
+        router.push("/dashboard");
       } catch (error: any) {
         toast({
           variant: "destructive",

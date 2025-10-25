@@ -11,6 +11,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "../ui/button";
 import { useUser } from "@/firebase/auth/use-user";
+import Link from "next/link";
+import { Wallet, LogOut } from "lucide-react";
 
 export function UserNav() {
   const { user, loading, logout } = useUser();
@@ -39,7 +41,7 @@ export function UserNav() {
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-8 w-8">
             <AvatarImage src={user.photoURL ?? ""} alt={user.displayName ?? ""} />
-            <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+            <AvatarFallback>{getInitials(user.displayName) || user.email?.[0].toUpperCase()}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
@@ -55,8 +57,16 @@ export function UserNav() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/wallet">
+            <Wallet className="mr-2 h-4 w-4" />
+            <span>Wallet</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={logout}>
-          Log out
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

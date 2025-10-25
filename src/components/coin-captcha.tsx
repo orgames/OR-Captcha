@@ -19,6 +19,12 @@ import {
 } from "lucide-react";
 import { validateUserCaptchaEntry } from "@/app/actions";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/firebase";
+import { useFirestore } from "@/firebase";
+import { doc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { useDoc } from "@/firebase";
+import { errorEmitter } from "@/firebase/error-emitter";
+import { FirestorePermissionError } from "@/firebase/errors";
 
 const CHARACTERS = "ABCDEFGHIJKLMNPQRSTUVWXYZ123456789";
 const CAPTCHA_LENGTH = 6;
@@ -37,9 +43,11 @@ const OraCoinReward = ({ className }: { className?: string }) => (
     </div>
 );
 
-
 export default function CoinCaptcha() {
-  const [coinBalance, setCoinBalance] = useState(0);
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const { data: userProfile, loading: userProfileLoading } = useDoc<any>(`users/${user?.uid}`);
+
   const [userInput, setUserInput] = useState("");
   const [captchaText, setCaptchaText] = useState("");
   const [isVerifying, startVerification] = useTransition();
@@ -62,12 +70,10 @@ export default function CoinCaptcha() {
     }
     setCaptchaText(newCaptchaText);
 
-    // Clear and draw background
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#E2F3FF";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw noise lines
     for (let i = 0; i < 5; i++) {
       ctx.strokeStyle = `hsla(200, 67%, 84%, ${Math.random() * 0.5 + 0.3})`;
       ctx.beginPath();
@@ -77,7 +83,6 @@ export default function CoinCaptcha() {
       ctx.stroke();
     }
     
-    // Draw text characters
     const chars = newCaptchaText.split("");
     const charWidth = canvas.width / (chars.length + 1);
     chars.forEach((char, i) => {
@@ -94,7 +99,6 @@ export default function CoinCaptcha() {
       ctx.restore();
     });
 
-     // Draw noise dots
     for (let i = 0; i < 150; i++) {
         const x = Math.random() * canvas.width;
         const y = Math.random() * canvas.height;
@@ -106,6 +110,36 @@ export default function CoinCaptcha() {
   useEffect(() => {
     generateCaptcha();
   }, []);
+
+  const addTransaction = async (amount: number, type: 'captcha' | 'ad') => {
+    if (!user) return;
+    const transactionData = {
+      amount,
+      type,
+      timestamp: serverTimestamp(),
+    };
+    const userRef = doc(firestore, 'users', user.uid);
+    const newBalance = (userProfile?.coinBalance || 0) + amount;
+    
+    updateDoc(userRef, { coinBalance: newBalance }).catch(async (serverError) => {
+      const permissionError = new FirestorePermissionError({
+        path: userRef.path,
+        operation: 'update',
+        requestResourceData: { coinBalance: newBalance },
+      });
+      errorEmitter.emit('permission-error', permissionError);
+    });
+
+    const transactionsRef = collection(firestore, 'users', user.uid, 'transactions');
+    addDoc(transactionsRef, transactionData).catch(async (serverError) => {
+       const permissionError = new FirestorePermissionError({
+        path: transactionsRef.path,
+        operation: 'create',
+        requestResourceData: transactionData,
+      });
+      errorEmitter.emit('permission-error', permissionError);
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -119,7 +153,7 @@ export default function CoinCaptcha() {
       const result = await validateUserCaptchaEntry(captchaImage, userInput);
 
       if (result.isValid) {
-        setCoinBalance((prev) => prev + COINS_PER_CAPTCHA);
+        await addTransaction(COINS_PER_CAPTCHA, 'captcha');
         setAnimationTrigger(Date.now());
       } else {
         toast({
@@ -134,10 +168,10 @@ export default function CoinCaptcha() {
   };
 
   const handleWatchAd = () => {
-    if (isVerifying || isAdRunning) return;
+    if (isVerifying || isAdRunning || !user) return;
     startAd(() => {
-      setTimeout(() => {
-        setCoinBalance((prev) => prev + COINS_PER_AD);
+      setTimeout(async () => {
+        await addTransaction(COINS_PER_AD, 'ad');
         setAnimationTrigger(Date.now());
       }, 3000);
     });
@@ -155,7 +189,7 @@ export default function CoinCaptcha() {
             <div className="flex items-center gap-2 bg-accent/30 text-accent-foreground p-2 rounded-lg">
               <OraCoin className="w-8 h-8" />
               <span className="text-3xl font-bold font-headline">
-                {coinBalance}
+                {userProfileLoading ? '...' : userProfile?.coinBalance || 0}
               </span>
             </div>
             {animationTrigger > 0 && (
