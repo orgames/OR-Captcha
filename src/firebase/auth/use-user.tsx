@@ -17,8 +17,20 @@ type UseUserReturn = {
 export function useUser(): UseUserReturn {
   const auth = useAuth();
   const firestore = useFirestore();
-  const [user, setUser] = useState<User | null>(auth?.currentUser ?? null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // onAuthStateChanged can take a null auth object, but it will just never fire.
+    // So we can set up the listener immediately.
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+       setUser(user);
+       setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [auth]);
+
 
   const logout = useCallback(async () => {
     if (auth) {
@@ -27,13 +39,9 @@ export function useUser(): UseUserReturn {
   }, [auth]);
 
   useEffect(() => {
-    if (!auth || !firestore) {
-      setLoading(false);
-      return;
-    }
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
+    const handleUserChange = async (user: User | null) => {
+        if (!user || !firestore || !auth) return;
+
         const userRef = doc(firestore, 'users', user.uid);
         
         try {
@@ -74,13 +82,13 @@ export function useUser(): UseUserReturn {
           }, auth.currentUser);
           errorEmitter.emit('permission-error', permissionError);
         }
+    }
+    
+    if (user) {
+        handleUserChange(user);
+    }
 
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [auth, firestore]);
+  }, [user, auth, firestore]);
 
   return { user, loading, logout };
 }

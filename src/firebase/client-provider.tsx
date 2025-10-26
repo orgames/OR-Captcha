@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { initializeFirebase } from './index';
+import { app, auth, firestore } from './index';
 import { FirebaseProvider } from './provider';
 
 export function FirebaseClientProvider({
@@ -9,8 +9,6 @@ export function FirebaseClientProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { app, auth, firestore } = initializeFirebase();
-
   return (
     <FirebaseProvider app={app} auth={auth} firestore={firestore}>
       {children}
