@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "./ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Send } from "lucide-react";
-import { collection, doc, getDocs, query, runTransaction, serverTimestamp, where, type Firestore, limit, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, runTransaction, serverTimestamp, type Firestore } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
@@ -34,7 +34,7 @@ type Transaction = {
 };
 
 function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: any; currentBalance: number, onSent: () => void }) {
-  const [recipientEmail, setRecipientEmail] = useState("");
+  const [recipientWalletAddress, setRecipientWalletAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [isSending, startSending] = useTransition();
   const { toast } = useToast();
@@ -45,10 +45,10 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
     if (!firestore || !currentUser) return;
     const sendAmount = parseInt(amount, 10);
 
-    if (!recipientEmail || !sendAmount || sendAmount <= 0) {
+    if (!recipientWalletAddress || !sendAmount || sendAmount <= 0) {
       toast({
         title: "Invalid Input",
-        description: "Please enter a valid email and a positive amount.",
+        description: "Please enter a valid wallet address and a positive amount.",
         variant: "destructive",
       });
       return;
@@ -63,7 +63,7 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
       return;
     }
 
-    if (recipientEmail === currentUser.email) {
+    if (recipientWalletAddress === currentUser.uid) {
       toast({
         title: "Invalid Recipient",
         description: "You cannot send coins to yourself.",
@@ -74,25 +74,16 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
 
     startSending(async () => {
        try {
-        const usersRef = collection(firestore, 'users');
-        const q = query(usersRef, where("email", "==", recipientEmail), limit(1));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-          toast({ title: "Error", description: "Recipient not found.", variant: "destructive" });
-          return;
-        }
+        const recipientRef = doc(firestore, 'users', recipientWalletAddress);
+        const senderRef = doc(firestore, `users/${currentUser.uid}`);
         
-        const recipientDoc = querySnapshot.docs[0];
-        const recipientUid = recipientDoc.id;
-        const senderUid = currentUser.uid;
-
         await runTransaction(firestore, async (transaction) => {
-            const senderRef = doc(firestore, `users/${senderUid}`);
-            const recipientRef = doc(firestore, `users/${recipientUid}`);
+            const recipientDoc = await transaction.get(recipientRef);
+            if (!recipientDoc.exists()) {
+                throw new Error("Recipient wallet address not found.");
+            }
 
             const senderDoc = await transaction.get(senderRef);
-
             if (!senderDoc.exists()) {
                 throw new Error("Your user document does not exist.");
             }
@@ -104,13 +95,13 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
             
             // Perform the updates
             transaction.update(senderRef, { coinBalance: senderBalance - sendAmount });
-            transaction.update(recipientRef, { coinBalance: recipientDoc.data().coinBalance + sendAmount });
+            transaction.update(recipientRef, { coinBalance: (recipientDoc.data().coinBalance || 0) + sendAmount });
             
             const senderTransactionRef = doc(collection(senderRef, 'transactions'));
             const senderTransactionData = {
                 type: 'send' as const,
                 amount: sendAmount,
-                to: recipientEmail,
+                to: recipientWalletAddress,
                 timestamp: serverTimestamp(),
             };
             transaction.set(senderTransactionRef, senderTransactionData);
@@ -119,7 +110,7 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
             const recipientTransactionData = {
                 type: 'receive' as const,
                 amount: sendAmount,
-                from: currentUser.email,
+                from: currentUser.uid,
                 timestamp: serverTimestamp(),
             };
             transaction.set(recipientTransactionRef, recipientTransactionData);
@@ -127,7 +118,7 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
 
         toast({
           title: "Success",
-          description: `Successfully sent ${sendAmount} ORA to ${recipientEmail}.`,
+          description: `Successfully sent ${sendAmount} ORA to the recipient.`,
         });
         onSent();
       } catch (error: any) {
@@ -144,11 +135,11 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
   return (
     <form onSubmit={handleSend} className="grid gap-4 mt-4">
       <Input
-        type="email"
-        placeholder="Recipient's email"
+        type="text"
+        placeholder="Recipient's Wallet Address"
         required
-        value={recipientEmail}
-        onChange={(e) => setRecipientEmail(e.target.value)}
+        value={recipientWalletAddress}
+        onChange={(e) => setRecipientWalletAddress(e.target.value)}
         disabled={isSending}
       />
       <Input
@@ -252,7 +243,7 @@ export function Wallet() {
               <DialogHeader>
                 <DialogTitle>Send ORA Coins</DialogTitle>
                 <DialogDescription>
-                  Enter the recipient's email and the amount to send.
+                  Enter the recipient's wallet address and the amount to send.
                 </DialogDescription>
               </DialogHeader>
               {user && <SendCoinForm currentUser={user} currentBalance={userProfile?.coinBalance || 0} onSent={handleCoinSent} />}

@@ -59,11 +59,11 @@
         },
         "from": {
           "type": "string",
-          "description": "Email of the sender (for receive transactions)."
+          "description": "Wallet address (UID) of the sender (for receive transactions)."
         },
         "to": {
           "type": "string",
-          "description": "Email of the recipient (for send transactions)."
+          "description": "Wallet address (UID) of the recipient (for send transactions)."
         }
       },
       "required": [
