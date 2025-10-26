@@ -17,7 +17,7 @@ type UseUserReturn = {
 export function useUser(): UseUserReturn {
   const auth = useAuth();
   const firestore = useFirestore();
-  const [user, setUser] = useState<User | null>(auth.currentUser);
+  const [user, setUser] = useState<User | null>(auth?.currentUser ?? null);
   const [loading, setLoading] = useState(true);
 
   const logout = useCallback(async () => {
@@ -28,6 +28,7 @@ export function useUser(): UseUserReturn {
 
   useEffect(() => {
     if (!auth || !firestore) {
+      setLoading(false);
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, async (user) => {

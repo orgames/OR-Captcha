@@ -5,17 +5,24 @@ import { doc, onSnapshot, type DocumentData } from 'firebase/firestore';
 import { useFirestore } from '../provider';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
+import { useAuth } from '../provider';
 
 export function useDoc<T extends DocumentData>(
-  path: string
+  path: string | null
 ): { data: T | null; loading: boolean } {
   const firestore = useFirestore();
+  const auth = useAuth();
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const docRef = useMemo(() => doc(firestore, path), [firestore, path]);
+  const docRef = useMemo(() => (firestore && path ? doc(firestore, path) : null), [firestore, path]);
 
   useEffect(() => {
+    if (!docRef) {
+        setLoading(false);
+        setData(null);
+        return;
+    }
     const unsubscribe = onSnapshot(
       docRef,
       (doc) => {
@@ -30,7 +37,7 @@ export function useDoc<T extends DocumentData>(
         const permissionError = new FirestorePermissionError({
           path: docRef.path,
           operation: 'get',
-        });
+        }, auth?.currentUser ?? null);
         errorEmitter.emit('permission-error', permissionError);
         console.error(`Error fetching document ${path}:`, error);
         setLoading(false);
@@ -38,7 +45,7 @@ export function useDoc<T extends DocumentData>(
     );
 
     return () => unsubscribe();
-  }, [docRef, path]);
+  }, [docRef, path, auth]);
 
   return { data, loading };
 }

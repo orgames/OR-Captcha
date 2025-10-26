@@ -18,6 +18,7 @@ import {
 import { useFirestore } from '../provider';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError } from '../errors';
+import { useAuth } from '../provider';
 
 type QueryOptions = {
   where?: [string, '==', any];
@@ -28,19 +29,21 @@ type QueryOptions = {
 };
 
 export function useCollection<T extends DocumentData>(
-  path: string,
+  path: string | null, // Allow path to be null
   options?: QueryOptions
 ): { data: T[] | null; loading: boolean } {
   const firestore = useFirestore();
+  const auth = useAuth();
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const collectionRef = useMemo(
-    () => collection(firestore, path),
+    () => (firestore && path ? collection(firestore, path) : null),
     [firestore, path]
   );
 
   const queryRef = useMemo(() => {
+    if (!collectionRef) return null;
     let q: Query = collectionRef;
     if (options?.where) q = query(q, where(...options.where));
     if (options?.orderBy) q = query(q, orderBy(...options.orderBy));
@@ -52,6 +55,12 @@ export function useCollection<T extends DocumentData>(
 
 
   useEffect(() => {
+    if (!queryRef || !collectionRef) {
+      setLoading(false);
+      setData(null);
+      return;
+    }
+
     const unsubscribe = onSnapshot(
       queryRef,
       (snapshot) => {
@@ -64,9 +73,9 @@ export function useCollection<T extends DocumentData>(
       },
       async (error) => {
         const permissionError = new FirestorePermissionError({
-          path: collectionRef.path,
+          path: (collectionRef as CollectionReference).path,
           operation: 'list',
-        });
+        }, auth?.currentUser ?? null);
         errorEmitter.emit('permission-error', permissionError);
         console.error(`Error fetching collection ${path}:`, error);
         setLoading(false);
@@ -74,7 +83,7 @@ export function useCollection<T extends DocumentData>(
     );
 
     return () => unsubscribe();
-  }, [queryRef, collectionRef.path]);
+  }, [queryRef, collectionRef, path, auth]);
 
   return { data, loading };
 }

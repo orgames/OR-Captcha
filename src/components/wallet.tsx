@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
+import { useMemo } from "react";
 
 const OraCoin = ({ className }: { className?: string }) => (
     <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -24,9 +25,13 @@ type Transaction = {
 
 export function Wallet() {
   const { user } = useUser();
-  const { data: userProfile, loading: userProfileLoading } = useDoc<any>(`users/${user?.uid}`);
+
+  const userDocPath = useMemo(() => (user ? `users/${user.uid}` : null), [user]);
+  const transactionsPath = useMemo(() => (user ? `users/${user.uid}/transactions` : null), [user]);
+
+  const { data: userProfile, loading: userProfileLoading } = useDoc<any>(userDocPath);
   const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(
-    `users/${user?.uid}/transactions`,
+    transactionsPath,
     { orderBy: ["timestamp", "desc"], limit: 50 }
   );
 
