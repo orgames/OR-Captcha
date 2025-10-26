@@ -42,18 +42,28 @@
           "type": "string",
           "enum": [
             "captcha",
-            "ad"
+            "ad",
+            "send",
+            "receive"
           ],
           "description": "The type of transaction."
         },
         "amount": {
           "type": "number",
-          "description": "The number of coins earned."
+          "description": "The number of coins involved in the transaction."
         },
         "timestamp": {
           "type": "string",
           "format": "date-time",
           "description": "The time the transaction occurred."
+        },
+        "from": {
+          "type": "string",
+          "description": "Email of the sender (for receive transactions)."
+        },
+        "to": {
+          "type": "string",
+          "description": "Email of the recipient (for send transactions)."
         }
       },
       "required": [

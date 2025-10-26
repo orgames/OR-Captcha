@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { doc, onSnapshot, type DocumentData } from 'firebase/firestore';
 import { useFirestore } from '../provider';
 import { errorEmitter } from '../error-emitter';
@@ -9,7 +9,7 @@ import { useAuth } from '../provider';
 
 export function useDoc<T extends DocumentData>(
   path: string | null
-): { data: T | null; loading: boolean } {
+): { data: T | null; loading: boolean; refetch: () => void; } {
   const firestore = useFirestore();
   const auth = useAuth();
   const [data, setData] = useState<T | null>(null);
@@ -17,11 +17,11 @@ export function useDoc<T extends DocumentData>(
 
   const docRef = useMemo(() => (firestore && path ? doc(firestore, path) : null), [firestore, path]);
 
-  useEffect(() => {
+  const subscribe = useCallback(() => {
     if (!docRef) {
         setLoading(false);
         setData(null);
-        return;
+        return () => {};
     }
     const unsubscribe = onSnapshot(
       docRef,
@@ -43,9 +43,19 @@ export function useDoc<T extends DocumentData>(
         setLoading(false);
       }
     );
-
-    return () => unsubscribe();
+    return unsubscribe;
   }, [docRef, path, auth]);
 
-  return { data, loading };
+  useEffect(() => {
+    const unsubscribe = subscribe();
+    return () => unsubscribe();
+  }, [subscribe]);
+  
+  const refetch = () => {
+      setLoading(true);
+      const unsubscribe = subscribe();
+      return () => unsubscribe();
+  }
+
+  return { data, loading, refetch };
 }

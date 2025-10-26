@@ -6,7 +6,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { useMemo } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { Button } from "./ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Input } from "./ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { sendOra } from "@/app/actions";
+import { Loader2, Send } from "lucide-react";
 
 const OraCoin = ({ className }: { className?: string }) => (
     <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -16,24 +22,152 @@ const OraCoin = ({ className }: { className?: string }) => (
 
 type Transaction = {
   id: string;
-  type: "captcha" | "ad";
+  type: "captcha" | "ad" | "send" | "receive";
   amount: number;
   timestamp: {
     toDate: () => Date;
   };
+  from?: string;
+  to?: string;
 };
+
+function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: any; currentBalance: number, onSent: () => void }) {
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [amount, setAmount] = useState("");
+  const [isSending, startSending] = useTransition();
+  const { toast } = useToast();
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const sendAmount = parseInt(amount, 10);
+
+    if (!recipientEmail || !sendAmount || sendAmount <= 0) {
+      toast({
+        title: "Invalid Input",
+        description: "Please enter a valid email and a positive amount.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (sendAmount > currentBalance) {
+      toast({
+        title: "Insufficient Funds",
+        description: "You do not have enough ORA coins to make this transfer.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (recipientEmail === currentUser.email) {
+      toast({
+        title: "Invalid Recipient",
+        description: "You cannot send coins to yourself.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    startSending(async () => {
+      const result = await sendOra(recipientEmail, sendAmount);
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: `Successfully sent ${sendAmount} ORA to ${recipientEmail}.`,
+        });
+        onSent(); 
+      } else {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
+  return (
+    <form onSubmit={handleSend} className="grid gap-4 mt-4">
+      <Input
+        type="email"
+        placeholder="Recipient's email"
+        required
+        value={recipientEmail}
+        onChange={(e) => setRecipientEmail(e.target.value)}
+        disabled={isSending}
+      />
+      <Input
+        type="number"
+        placeholder="Amount"
+        required
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        disabled={isSending}
+        min="1"
+        max={currentBalance}
+      />
+      <Button type="submit" className="w-full" disabled={isSending}>
+        {isSending ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Send className="mr-2 h-4 w-4" />
+        )}
+        Send Coins
+      </Button>
+    </form>
+  );
+}
+
 
 export function Wallet() {
   const { user } = useUser();
+  const [isSendDialogOpen, setSendDialogOpen] = useState(false);
 
   const userDocPath = useMemo(() => (user ? `users/${user.uid}` : null), [user]);
   const transactionsPath = useMemo(() => (user ? `users/${user.uid}/transactions` : null), [user]);
 
-  const { data: userProfile, loading: userProfileLoading } = useDoc<any>(userDocPath);
-  const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(
+  const { data: userProfile, loading: userProfileLoading, refetch: refetchUserProfile } = useDoc<any>(userDocPath);
+  const { data: transactions, loading: transactionsLoading, refetch: refetchTransactions } = useCollection<Transaction>(
     transactionsPath,
     { orderBy: ["timestamp", "desc"], limit: 50 }
   );
+
+  const handleCoinSent = () => {
+    setSendDialogOpen(false);
+    refetchUserProfile();
+    refetchTransactions();
+  }
+
+  const getTransactionDetails = (tx: Transaction) => {
+    switch (tx.type) {
+        case 'captcha':
+        case 'ad':
+            return {
+                badgeVariant: tx.type === 'ad' ? 'secondary' : 'default' as const,
+                amountText: `+${tx.amount}`,
+                date: tx.timestamp ? format(tx.timestamp.toDate(), "PPpp") : '...',
+            };
+        case 'send':
+            return {
+                badgeVariant: 'destructive' as const,
+                amountText: `-${tx.amount}`,
+                date: tx.timestamp ? format(tx.timestamp.toDate(), "PPpp") : '...',
+            };
+        case 'receive':
+            return {
+                badgeVariant: 'outline' as const,
+                amountText: `+${tx.amount}`,
+                date: tx.timestamp ? format(tx.timestamp.toDate(), "PPpp") : '...',
+            };
+        default:
+            return {
+                badgeVariant: 'default' as const,
+                amountText: `${tx.amount}`,
+                date: tx.timestamp ? format(tx.timestamp.toDate(), "PPpp") : '...',
+            };
+    }
+  }
+
 
   return (
     <div className="w-full max-w-md space-y-8">
@@ -52,6 +186,24 @@ export function Wallet() {
             </div>
           </div>
         </CardHeader>
+        <CardContent>
+          <Dialog open={isSendDialogOpen} onOpenChange={setSendDialogOpen}>
+            <DialogTrigger asChild>
+               <Button className="w-full">
+                <Send className="mr-2 h-4 w-4" /> Send ORA
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Send ORA Coins</DialogTitle>
+                <DialogDescription>
+                  Enter the recipient's email and the amount to send.
+                </DialogDescription>
+              </DialogHeader>
+              {user && <SendCoinForm currentUser={user} currentBalance={userProfile?.coinBalance || 0} onSent={handleCoinSent} />}
+            </DialogContent>
+          </Dialog>
+        </CardContent>
       </Card>
       
       <Card className="shadow-lg">
@@ -84,17 +236,20 @@ export function Wallet() {
                     </TableCell>
                   </TableRow>
                 )}
-                {transactions?.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell>
-                      <Badge variant={tx.type === 'ad' ? 'secondary' : 'default'}>{tx.type}</Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">+{tx.amount}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {tx.timestamp ? format(tx.timestamp.toDate(), "PPpp") : '...'}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {transactions?.map((tx) => {
+                  const details = getTransactionDetails(tx);
+                  return (
+                    <TableRow key={tx.id}>
+                      <TableCell>
+                        <Badge variant={details.badgeVariant}>{tx.type}</Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{details.amountText}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {details.date}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </ScrollArea>

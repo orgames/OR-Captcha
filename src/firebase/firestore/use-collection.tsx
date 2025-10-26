@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   onSnapshot,
   query,
@@ -31,7 +31,7 @@ type QueryOptions = {
 export function useCollection<T extends DocumentData>(
   path: string | null, // Allow path to be null
   options?: QueryOptions
-): { data: T[] | null; loading: boolean } {
+): { data: T[] | null; loading: boolean; refetch: () => void; } {
   const firestore = useFirestore();
   const auth = useAuth();
   const [data, setData] = useState<T[] | null>(null);
@@ -54,11 +54,11 @@ export function useCollection<T extends DocumentData>(
   }, [collectionRef, options]);
 
 
-  useEffect(() => {
+  const subscribe = useCallback(() => {
     if (!queryRef || !collectionRef) {
       setLoading(false);
       setData(null);
-      return;
+      return () => {};
     }
 
     const unsubscribe = onSnapshot(
@@ -82,8 +82,19 @@ export function useCollection<T extends DocumentData>(
       }
     );
 
-    return () => unsubscribe();
+    return unsubscribe;
   }, [queryRef, collectionRef, path, auth]);
 
-  return { data, loading };
+  useEffect(() => {
+    const unsubscribe = subscribe();
+    return () => unsubscribe();
+  }, [subscribe]);
+
+  const refetch = () => {
+    setLoading(true);
+    const unsubscribe = subscribe();
+    return () => unsubscribe();
+  }
+
+  return { data, loading, refetch };
 }
