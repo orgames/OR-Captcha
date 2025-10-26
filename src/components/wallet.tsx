@@ -1,6 +1,6 @@
 "use client";
 
-import { useUser, useDoc, useCollection } from "@/firebase";
+import { useUser, useDoc, useCollection, useFirestore } from "@/firebase";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,8 +11,10 @@ import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { sendOra } from "@/app/actions";
 import { Loader2, Send } from "lucide-react";
+import { collection, doc, getDocs, query, runTransaction, serverTimestamp, where, type Firestore } from "firebase/firestore";
+import { errorEmitter } from "@/firebase/error-emitter";
+import { FirestorePermissionError } from "@/firebase/errors";
 
 const OraCoin = ({ className }: { className?: string }) => (
     <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -36,9 +38,11 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
   const [amount, setAmount] = useState("");
   const [isSending, startSending] = useTransition();
   const { toast } = useToast();
+  const firestore = useFirestore();
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!firestore) return;
     const sendAmount = parseInt(amount, 10);
 
     if (!recipientEmail || !sendAmount || sendAmount <= 0) {
@@ -69,19 +73,71 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
     }
 
     startSending(async () => {
-      const result = await sendOra(recipientEmail, sendAmount);
-      if (result.success) {
+       try {
+        const usersRef = collection(firestore, 'users');
+        const q = query(usersRef, where("email", "==", recipientEmail), limit(1));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          toast({ title: "Error", description: "Recipient not found.", variant: "destructive" });
+          return;
+        }
+        
+        const recipientDoc = querySnapshot.docs[0];
+        const recipientUid = recipientDoc.id;
+        const senderUid = currentUser.uid;
+
+        await runTransaction(firestore, async (transaction) => {
+            const senderRef = doc(firestore, `users/${senderUid}`);
+            const recipientRef = doc(firestore, `users/${recipientUid}`);
+
+            const senderDoc = await transaction.get(senderRef);
+
+            if (!senderDoc.exists()) {
+                throw new Error("Your user document does not exist.");
+            }
+
+            const senderBalance = senderDoc.data()?.coinBalance || 0;
+            if (senderBalance < sendAmount) {
+                throw new Error('Insufficient funds.');
+            }
+            
+            // Perform the updates
+            transaction.update(senderRef, { coinBalance: senderBalance - sendAmount });
+            transaction.update(recipientRef, { coinBalance: recipientDoc.data().coinBalance + sendAmount });
+            
+            const senderTransactionRef = doc(collection(senderRef, 'transactions'));
+            transaction.set(senderTransactionRef, {
+                type: 'send',
+                amount: sendAmount,
+                to: recipientEmail,
+                timestamp: serverTimestamp(),
+            });
+
+            const recipientTransactionRef = doc(collection(recipientRef, 'transactions'));
+            transaction.set(recipientTransactionRef, {
+                type: 'receive',
+                amount: sendAmount,
+                from: currentUser.email,
+                timestamp: serverTimestamp(),
+            });
+        });
+
         toast({
           title: "Success",
           description: `Successfully sent ${sendAmount} ORA to ${recipientEmail}.`,
         });
-        onSent(); 
-      } else {
-        toast({
-          title: "Error",
-          description: result.error,
-          variant: "destructive",
-        });
+        onSent();
+      } catch (error: any) {
+        console.error('Transaction failed: ', error);
+        // This is a generic error handler. For permission errors, the specific handlers in the data hooks will still trigger.
+        if (error.code !== 'permission-denied') {
+            toast({
+              title: "Error",
+              description: error.message || 'An unexpected error occurred during the transaction.',
+              variant: "destructive",
+            });
+        }
       }
     });
   };
