@@ -19,25 +19,15 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, updateDoc, collection, addDoc, serverTimestamp, runTransaction, getDoc, setDoc, increment } from "firebase/firestore";
+import { doc, collection, setDoc, serverTimestamp, increment } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { validateCaptchaEntry } from "@/ai/flows/validate-captcha-entry";
+import { validateUserCaptchaEntry } from "@/app/actions";
 
 const CHARACTERS = "ABCDEFGHIJKLMNPQRSTUVWXYZ123456789";
 const CAPTCHA_LENGTH = 6;
 const COINS_PER_CAPTCHA = 10;
 const COINS_PER_AD = 25;
-
-async function validateUserCaptchaEntry(
-  captchaImage: string,
-  userEntry: string
-) {
-  "use server";
-  const result = await validateCaptchaEntry({ captchaImage, userEntry });
-  return result;
-}
-
 
 const OraCoin = ({ className }: { className?: string }) => (
     <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>

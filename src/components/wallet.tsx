@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "./ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Send } from "lucide-react";
-import { collection, doc, getDocs, query, runTransaction, serverTimestamp, where, type Firestore } from "firebase/firestore";
+import { collection, doc, getDocs, query, runTransaction, serverTimestamp, where, type Firestore, limit, setDoc } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
@@ -42,7 +42,7 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firestore) return;
+    if (!firestore || !currentUser) return;
     const sendAmount = parseInt(amount, 10);
 
     if (!recipientEmail || !sendAmount || sendAmount <= 0) {
@@ -107,20 +107,22 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
             transaction.update(recipientRef, { coinBalance: recipientDoc.data().coinBalance + sendAmount });
             
             const senderTransactionRef = doc(collection(senderRef, 'transactions'));
-            transaction.set(senderTransactionRef, {
-                type: 'send',
+            const senderTransactionData = {
+                type: 'send' as const,
                 amount: sendAmount,
                 to: recipientEmail,
                 timestamp: serverTimestamp(),
-            });
+            };
+            transaction.set(senderTransactionRef, senderTransactionData);
 
             const recipientTransactionRef = doc(collection(recipientRef, 'transactions'));
-            transaction.set(recipientTransactionRef, {
-                type: 'receive',
+            const recipientTransactionData = {
+                type: 'receive' as const,
                 amount: sendAmount,
                 from: currentUser.email,
                 timestamp: serverTimestamp(),
-            });
+            };
+            transaction.set(recipientTransactionRef, recipientTransactionData);
         });
 
         toast({
@@ -130,14 +132,11 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
         onSent();
       } catch (error: any) {
         console.error('Transaction failed: ', error);
-        // This is a generic error handler. For permission errors, the specific handlers in the data hooks will still trigger.
-        if (error.code !== 'permission-denied') {
-            toast({
-              title: "Error",
-              description: error.message || 'An unexpected error occurred during the transaction.',
-              variant: "destructive",
-            });
-        }
+        toast({
+          title: "Error",
+          description: error.message || 'An unexpected error occurred during the transaction.',
+          variant: "destructive",
+        });
       }
     });
   };
