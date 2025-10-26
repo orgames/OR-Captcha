@@ -50,7 +50,7 @@ export default function CoinCaptcha() {
     return doc(firestore, `users/${user.uid}`);
   }, [user, firestore]);
 
-  const { data: userProfile, loading: userProfileLoading } = useDoc<any>(userDocRef?.path ?? `users/nouser`);
+  const { data: userProfile, loading: userProfileLoading } = useDoc<any>(userDocRef?.path);
 
   const [userInput, setUserInput] = useState("");
   const [captchaText, setCaptchaText] = useState("");
