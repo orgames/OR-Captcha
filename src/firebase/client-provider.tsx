@@ -9,7 +9,6 @@ export function FirebaseClientProvider({
 }: {
   children: React.ReactNode;
 }) {
-  // We are calling this on the client, so we can be sure the instances are valid.
   const { app, auth, firestore } = getFirebaseInstances();
 
   return (

@@ -15,14 +15,14 @@ type FirebaseContextValue = {
 const FirebaseContext = createContext<FirebaseContextValue>({
   app: null,
   auth: null,
-  firestore: null,
+firestore: null,
 });
 
 type FirebaseProviderProps = {
   children: React.ReactNode;
-  app: FirebaseApp;
-  auth: Auth;
-  firestore: Firestore;
+  app: FirebaseApp | null;
+  auth: Auth | null;
+  firestore: Firestore | null;
 };
 
 export function FirebaseProvider({ children, app, auth, firestore }: FirebaseProviderProps) {
