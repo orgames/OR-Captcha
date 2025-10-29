@@ -3,9 +3,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/firebase/auth/use-user";
-import { FirebaseClientProvider } from "@/firebase/client-provider";
 
-function HomePageClient() {
+export default function HomePageContent() {
   const { user, loading } = useUser();
   const router = useRouter();
 
@@ -24,12 +23,4 @@ function HomePageClient() {
       <p>Loading...</p>
     </main>
   );
-}
-
-export default function HomePageContent() {
-  return (
-    <FirebaseClientProvider>
-      <HomePageClient />
-    </FirebaseClientProvider>
-  )
 }

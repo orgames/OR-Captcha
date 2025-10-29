@@ -5,9 +5,8 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@/firebase/auth/use-user";
 import CoinCaptcha from "@/components/coin-captcha";
 import { UserNav } from "@/components/auth/user-nav";
-import { FirebaseClientProvider } from "@/firebase/client-provider";
 
-function DashboardClient() {
+export default function DashboardPageContent() {
   const { user, loading } = useUser();
   const router = useRouter();
 
@@ -43,13 +42,4 @@ function DashboardClient() {
       <CoinCaptcha />
     </main>
   );
-}
-
-
-export default function DashboardPageContent() {
-  return (
-    <FirebaseClientProvider>
-      <DashboardClient />
-    </FirebaseClientProvider>
-  )
 }

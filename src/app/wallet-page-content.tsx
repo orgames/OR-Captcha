@@ -8,9 +8,8 @@ import { Wallet } from "@/components/wallet";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { FirebaseClientProvider } from "@/firebase/client-provider";
 
-function WalletClient() {
+export default function WalletPageContent() {
   const { user, loading } = useUser();
   const router = useRouter();
 
@@ -47,12 +46,4 @@ function WalletClient() {
       <Wallet />
     </main>
   );
-}
-
-export default function WalletPageContent() {
-  return (
-    <FirebaseClientProvider>
-      <WalletClient />
-    </FirebaseClientProvider>
-  )
 }
