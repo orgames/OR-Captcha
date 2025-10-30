@@ -18,9 +18,19 @@ export default function HomePageContent() {
     }
   }, [user, loading, router]);
 
+  if (loading || !user) {
+    return (
+      <main className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4">
+        <p>Loading...</p>
+      </main>
+    );
+  }
+
+  // This will likely not be seen as the redirect will happen,
+  // but it's good practice to have a fallback.
   return (
     <main className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4">
-      <p>Loading...</p>
+      <p>Redirecting...</p>
     </main>
   );
 }

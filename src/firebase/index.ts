@@ -18,7 +18,7 @@ let auth: Auth;
 let firestore: Firestore;
 
 // This function should only be called on the client side.
-function getFirebaseInstances() {
+function initializeFirebase() {
   if (typeof window !== "undefined") {
     if (!getApps().length) {
       app = initializeApp(firebaseConfig);
@@ -27,11 +27,21 @@ function getFirebaseInstances() {
     }
     auth = getAuth(app);
     firestore = getFirestore(app);
-    return { app, auth, firestore };
   }
-  // On the server, we return null instances.
-  return { app: null, auth: null, firestore: null };
 }
 
+// Call initialization
+initializeFirebase();
 
-export { getFirebaseInstances };
+// Getter functions
+export function getFirebaseInstances() {
+  // This is a guard against server-side execution.
+  // The hooks and providers should prevent this from being called on the server.
+  if (typeof window === "undefined") {
+      return { app: null, auth: null, firestore: null };
+  }
+  if (!app) {
+    initializeFirebase();
+  }
+  return { app, auth, firestore };
+}
