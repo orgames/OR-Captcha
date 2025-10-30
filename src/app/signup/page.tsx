@@ -1,3 +1,4 @@
+
 import { SignupForm } from "@/components/auth/signup-form";
 import { FirebaseClientProvider } from "@/firebase/client-provider";
 import Link from "next/link";

@@ -1,8 +1,7 @@
-"use client";
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firestore';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 import { firebaseConfig } from './config';
 
 // Hooks
@@ -12,27 +11,24 @@ export { useCollection } from './firestore/use-collection';
 export { useDoc } from './firestore/use-doc';
 export { useUser } from './auth/use-user';
 
-let app: FirebaseApp | undefined;
-let auth: Auth | undefined;
-let firestore: Firestore | undefined;
+let app: FirebaseApp;
+let auth: Auth;
+let firestore: Firestore;
 
 function initializeFirebase() {
-  if (typeof window !== 'undefined') {
-    if (!getApps().length) {
-      app = initializeApp(firebaseConfig);
-    } else {
-      app = getApp();
-    }
-    auth = getAuth(app);
-    firestore = getFirestore(app);
+  if (getApps().length === 0) {
+    app = initializeApp(firebaseConfig);
+  } else {
+    app = getApp();
   }
+  auth = getAuth(app);
+  firestore = getFirestore(app);
 }
 
-// Initialize on first load
-initializeFirebase();
-
-// Getter to ensure instances are available
+// This function should only be called on the client.
 export function getFirebaseInstances() {
+  // Check if the instances have been initialized, if not, initialize them.
+  // This is to prevent re-initialization on every call.
   if (!app) {
     initializeFirebase();
   }

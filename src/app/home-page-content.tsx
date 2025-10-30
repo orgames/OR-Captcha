@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect } from "react";
@@ -18,19 +19,11 @@ export default function HomePageContent() {
     }
   }, [user, loading, router]);
 
-  if (loading || !user) {
-    return (
-      <main className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4">
-        <p>Loading...</p>
-      </main>
-    );
-  }
-
-  // This will likely not be seen as the redirect will happen,
-  // but it's good practice to have a fallback.
+  // Show a loading state while we determine the user's auth status
+  // and redirect them.
   return (
     <main className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4">
-      <p>Redirecting...</p>
+      <p>Loading...</p>
     </main>
   );
 }
