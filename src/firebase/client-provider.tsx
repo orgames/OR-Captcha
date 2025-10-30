@@ -13,10 +13,10 @@ export function FirebaseClientProvider({
   children: React.ReactNode;
 }) {
   const [{ app, auth, firestore }, setFirebase] = useState<{
-    app: FirebaseApp | null;
-    auth: Auth | null;
-    firestore: Firestore | null;
-  }>({ app: null, auth: null, firestore: null });
+    app: FirebaseApp | undefined;
+    auth: Auth | undefined;
+    firestore: Firestore | undefined;
+  }>({ app: undefined, auth: undefined, firestore: undefined });
 
   useEffect(() => {
     // getFirebaseInstances should only be called on the client.

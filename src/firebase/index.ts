@@ -2,7 +2,7 @@
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFirestore, type Firestore } from 'firestore';
 import { firebaseConfig } from './config';
 
 // Hooks
@@ -12,14 +12,12 @@ export { useCollection } from './firestore/use-collection';
 export { useDoc } from './firestore/use-doc';
 export { useUser } from './auth/use-user';
 
+let app: FirebaseApp | undefined;
+let auth: Auth | undefined;
+let firestore: Firestore | undefined;
 
-let app: FirebaseApp;
-let auth: Auth;
-let firestore: Firestore;
-
-// This function should only be called on the client side.
 function initializeFirebase() {
-  if (typeof window !== "undefined") {
+  if (typeof window !== 'undefined') {
     if (!getApps().length) {
       app = initializeApp(firebaseConfig);
     } else {
@@ -30,16 +28,11 @@ function initializeFirebase() {
   }
 }
 
-// Call initialization
+// Initialize on first load
 initializeFirebase();
 
-// Getter functions
+// Getter to ensure instances are available
 export function getFirebaseInstances() {
-  // This is a guard against server-side execution.
-  // The hooks and providers should prevent this from being called on the server.
-  if (typeof window === "undefined") {
-      return { app: null, auth: null, firestore: null };
-  }
   if (!app) {
     initializeFirebase();
   }
