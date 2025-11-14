@@ -37,10 +37,10 @@ const OraCoinReward = ({ className }: { className?: string }) => (
     </div>
 );
 
-const Wheel = ({ rotation }: { rotation: number }) => (
-  <div className="relative w-64 h-64 md:w-80 md:h-80">
+const Wheel = ({ rotation, onSpin, isSpinning, isAdRunning }: { rotation: number, onSpin: () => void, isSpinning: boolean, isAdRunning: boolean }) => (
+  <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center">
     <div
-      className="absolute inset-0 transition-transform duration-5000 ease-out"
+      className="absolute inset-0 transition-transform duration-[5000ms] ease-out"
       style={{ transform: `rotate(${rotation}deg)` }}
     >
       <svg viewBox="0 0 200 200" className="w-full h-full">
@@ -82,11 +82,19 @@ const Wheel = ({ rotation }: { rotation: number }) => (
         })}
       </svg>
     </div>
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-4 w-8 h-8 text-destructive">
-      <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" transform="rotate(180 12 12)"/>
-      </svg>
-    </div>
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2" style={{ width: 0, height: 0, borderLeft: '10px solid transparent', borderRight: '10px solid transparent', borderTop: '20px solid hsl(var(--destructive))' }}></div>
+    <Button
+        onClick={onSpin}
+        className="w-24 h-24 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-xl font-bold shadow-lg"
+        disabled={isSpinning || isAdRunning}
+        style={{ zIndex: 10 }}
+    >
+        {isSpinning ? (
+          <Loader2 className="h-8 w-8 animate-spin" />
+        ) : (
+            "Spin!"
+        )}
+    </Button>
   </div>
 );
 
@@ -157,11 +165,12 @@ export default function SpinToEarn() {
 
         const baseRotations = 5;
         const segmentAngle = 360 / TOTAL_PRIZES;
-        const prizeAngle = 360 - (winningPrizeIndex * segmentAngle);
+        // The pointer is at the top (0 degrees or 360 degrees), so we need to align the winning segment with it.
+        const prizeAngle = 360 - (winningPrizeIndex * segmentAngle); 
         const randomOffset = (Math.random() - 0.5) * segmentAngle * 0.8;
         const targetRotation = (baseRotations * 360) + prizeAngle + randomOffset;
 
-        setRotation(targetRotation);
+        setRotation(prev => prev + targetRotation - (prev % 360));
         
         // Wait for spin animation to finish
         await new Promise(resolve => setTimeout(resolve, 5000));
@@ -220,20 +229,7 @@ export default function SpinToEarn() {
         </div>
       </CardHeader>
       <CardContent className="flex flex-col items-center justify-center space-y-8">
-        <Wheel rotation={rotation} />
-        <Button
-            onClick={handleSpin}
-            className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-            disabled={isSpinning || isAdRunning}
-        >
-            {isSpinning ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Spinning...
-              </>
-            ) : (
-                "Spin the Wheel!"
-            )}
-        </Button>
+        <Wheel rotation={rotation} onSpin={handleSpin} isSpinning={isSpinning} isAdRunning={isAdRunning} />
       </CardContent>
       <CardFooter>
         <Button
@@ -256,3 +252,5 @@ export default function SpinToEarn() {
     </Card>
   );
 }
+
+    
