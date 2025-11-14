@@ -24,7 +24,7 @@ const OraCoin = ({ className }: { className?: string }) => (
 
 type Transaction = {
   id: string;
-  type: "captcha" | "ad" | "send" | "receive";
+  type: "captcha" | "ad" | "send" | "receive" | "spin";
   amount: number;
   timestamp: {
     toDate: () => Date;
@@ -188,6 +188,7 @@ export function Wallet() {
     switch (tx.type) {
         case 'captcha':
         case 'ad':
+        case 'spin':
             return {
                 badgeVariant: tx.type === 'ad' ? 'secondary' : 'default' as const,
                 amountText: `+${tx.amount}`,

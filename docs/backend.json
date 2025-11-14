@@ -44,7 +44,8 @@
             "captcha",
             "ad",
             "send",
-            "receive"
+            "receive",
+            "spin"
           ],
           "description": "The type of transaction."
         },

@@ -4,8 +4,8 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/firebase/auth/use-user";
-import CoinCaptcha from "@/components/coin-captcha";
 import { UserNav } from "@/components/auth/user-nav";
+import SpinToEarn from "@/components/spin-to-earn";
 
 export default function DashboardPageContent() {
   const { user, loading } = useUser();
@@ -36,11 +36,11 @@ export default function DashboardPageContent() {
             <span className="text-4xl font-bold text-primary-foreground">O</span>
         </div>
         <h1 className="text-4xl font-headline font-bold text-center text-foreground">
-          ORA Captcha
+          ORA Spin & Earn
         </h1>
-        <p className="text-muted-foreground text-center">Solve captchas to earn ORA coins!</p>
+        <p className="text-muted-foreground text-center">Spin the wheel to earn ORA coins!</p>
       </div>
-      <CoinCaptcha />
+      <SpinToEarn />
     </main>
   );
 }
