@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -47,7 +48,15 @@ export function useUser(): UseUserReturn {
         try {
           const userDoc = await getDoc(userRef);
           
-          const userData = {
+          const userData: {
+            uid: string;
+            email: string | null;
+            displayName: string | null;
+            photoURL: string | null;
+            spinsToday?: number;
+            lastSpinDate?: string;
+            coinBalance?: number;
+          } = {
             uid: user.uid,
             email: user.email,
             displayName: user.displayName,
@@ -55,12 +64,15 @@ export function useUser(): UseUserReturn {
           };
 
           if (!userDoc.exists()) {
-            const data = { ...userData, coinBalance: 0 };
-            setDoc(userRef, data, { merge: true }).catch((serverError) => {
+            userData.coinBalance = 0;
+            userData.spinsToday = 0;
+            userData.lastSpinDate = new Date().toISOString().split('T')[0];
+            
+            setDoc(userRef, userData, { merge: true }).catch((serverError) => {
               const permissionError = new FirestorePermissionError({
                 path: userRef.path,
                 operation: 'create',
-                requestResourceData: data,
+                requestResourceData: userData,
               }, auth.currentUser);
               errorEmitter.emit('permission-error', permissionError);
             });

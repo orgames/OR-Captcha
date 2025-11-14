@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect, useTransition, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import {
   Card,
   CardContent,
@@ -17,13 +17,14 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, collection, setDoc, serverTimestamp, increment } from "firebase/firestore";
+import { doc, collection, setDoc, serverTimestamp, increment, runTransaction } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
 const COINS_PER_AD = 25;
 const spinPrizes = [1, 2, 0, 1, 2, 3, 1, 0];
 const TOTAL_PRIZES = spinPrizes.length;
+const MAX_SPINS_PER_DAY = 20;
 
 const OraCoin = ({ className }: { className?: string }) => (
     <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -37,7 +38,7 @@ const OraCoinReward = ({ className }: { className?: string }) => (
     </div>
 );
 
-const Wheel = ({ rotation, onSpin, isSpinning, isAdRunning }: { rotation: number, onSpin: () => void, isSpinning: boolean, isAdRunning: boolean }) => (
+const Wheel = ({ rotation, onSpin, isSpinning, isAdRunning, disabled }: { rotation: number, onSpin: () => void, isSpinning: boolean, isAdRunning: boolean, disabled: boolean }) => (
   <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center">
     <div
       className="absolute inset-0 transition-transform duration-[5000ms] ease-out"
@@ -86,7 +87,7 @@ const Wheel = ({ rotation, onSpin, isSpinning, isAdRunning }: { rotation: number
     <Button
         onClick={onSpin}
         className="w-24 h-24 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-xl font-bold shadow-lg"
-        disabled={isSpinning || isAdRunning}
+        disabled={isSpinning || isAdRunning || disabled}
         style={{ zIndex: 10 }}
     >
         {isSpinning ? (
@@ -114,24 +115,55 @@ export default function SpinToEarn() {
   const [animationTrigger, setAnimationTrigger] = useState(0);
   const [rotation, setRotation] = useState(0);
   const { toast } = useToast();
+  
+  const spinsLeft = userProfile ? MAX_SPINS_PER_DAY - (userProfile.spinsToday || 0) : 0;
+  const canSpin = spinsLeft > 0 && !userProfileLoading;
 
   const addTransaction = async (amount: number, type: 'spin' | 'ad') => {
     if (!user || !firestore) return;
-    
+
     const userRef = doc(firestore, 'users', user.uid);
     const transactionsRef = collection(firestore, 'users', user.uid, 'transactions');
     const newTransactionRef = doc(transactionsRef);
 
-    const transactionData = {
-      amount,
-      type,
-      timestamp: serverTimestamp(),
-    };
-    
-    const userUpdate = setDoc(userRef, { coinBalance: increment(amount) }, { merge: true });
-    const transactionUpdate = setDoc(newTransactionRef, transactionData);
+    try {
+        await runTransaction(firestore, async (transaction) => {
+            const userDoc = await transaction.get(userRef);
+            if (!userDoc.exists()) {
+              throw new Error("User document does not exist.");
+            }
 
-    Promise.all([userUpdate, transactionUpdate]).catch((error) => {
+            let newSpinsToday = userDoc.data().spinsToday || 0;
+            const lastSpinDate = userDoc.data().lastSpinDate || new Date(0).toISOString().split('T')[0];
+            const today = new Date().toISOString().split('T')[0];
+
+            if (lastSpinDate !== today) {
+              newSpinsToday = 0;
+            }
+
+            if (type === 'spin') {
+              if (newSpinsToday >= MAX_SPINS_PER_DAY) {
+                throw new Error("Spin limit reached for today.");
+              }
+              newSpinsToday++;
+            }
+
+            const newBalance = (userDoc.data().coinBalance || 0) + amount;
+
+            const transactionData = {
+              amount,
+              type,
+              timestamp: serverTimestamp(),
+            };
+
+            transaction.update(userRef, { 
+                coinBalance: newBalance,
+                spinsToday: newSpinsToday,
+                lastSpinDate: today,
+            });
+            transaction.set(newTransactionRef, transactionData);
+        });
+    } catch (error: any) {
         if (error.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
                 path: userRef.path,
@@ -139,25 +171,28 @@ export default function SpinToEarn() {
                 requestResourceData: { coinBalance: `increment(${amount})` },
             });
             errorEmitter.emit('permission-error', permissionError);
-            const permissionError2 = new FirestorePermissionError({
-                path: newTransactionRef.path,
-                operation: 'create',
-                requestResourceData: transactionData
-            });
-            errorEmitter.emit('permission-error', permissionError2);
         } else {
             console.error("Transaction failed: ", error);
             toast({
-                title: "An unexpected error occurred",
+                title: error.message || "An unexpected error occurred",
                 description: "Could not complete the transaction. Please try again.",
                 variant: "destructive"
             });
         }
-    });
+    }
   };
 
   const handleSpin = () => {
-    if (isSpinning || isAdRunning) return;
+    if (isSpinning || isAdRunning || !canSpin) {
+      if (!canSpin) {
+        toast({
+          title: "Spin Limit Reached",
+          description: `You have used all your ${MAX_SPINS_PER_DAY} spins for today. Come back tomorrow!`,
+          variant: "destructive",
+        });
+      }
+      return;
+    }
     
     startSpinning(async () => {
         const winningPrizeIndex = Math.floor(Math.random() * TOTAL_PRIZES);
@@ -165,18 +200,17 @@ export default function SpinToEarn() {
 
         const baseRotations = 5;
         const segmentAngle = 360 / TOTAL_PRIZES;
-        // The pointer is at the top (0 degrees or 360 degrees), so we need to align the winning segment with it.
         const prizeAngle = 360 - (winningPrizeIndex * segmentAngle); 
         const randomOffset = (Math.random() - 0.5) * segmentAngle * 0.8;
         const targetRotation = (baseRotations * 360) + prizeAngle + randomOffset;
 
         setRotation(prev => prev + targetRotation - (prev % 360));
         
-        // Wait for spin animation to finish
         await new Promise(resolve => setTimeout(resolve, 5000));
         
+        await addTransaction(prizeAmount, 'spin');
+
         if (prizeAmount > 0) {
-            await addTransaction(prizeAmount, 'spin');
             setAnimationTrigger(Date.now());
             toast({
                 title: "You Won!",
@@ -228,8 +262,11 @@ export default function SpinToEarn() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col items-center justify-center space-y-8">
-        <Wheel rotation={rotation} onSpin={handleSpin} isSpinning={isSpinning} isAdRunning={isAdRunning} />
+      <CardContent className="flex flex-col items-center justify-center space-y-4">
+        <Wheel rotation={rotation} onSpin={handleSpin} isSpinning={isSpinning} isAdRunning={isAdRunning} disabled={!canSpin} />
+        <div className="text-center text-muted-foreground">
+            { userProfileLoading ? <p>Loading spins...</p> : <p>You have <span className="font-bold text-foreground">{spinsLeft}</span> spins left today.</p> }
+        </div>
       </CardContent>
       <CardFooter>
         <Button
@@ -252,5 +289,3 @@ export default function SpinToEarn() {
     </Card>
   );
 }
-
-    
