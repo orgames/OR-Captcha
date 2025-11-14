@@ -27,6 +27,22 @@
         "coinBalance": {
           "type": "number",
           "description": "The user's current ORA coin balance."
+        },
+        "spinsToday": {
+          "type": "number",
+          "description": "Number of spins used today."
+        },
+        "lastSpinDate": {
+          "type": "string",
+          "description": "The last date the user spun the wheel, in YYYY-MM-DD format."
+        },
+        "scratchesToday": {
+          "type": "number",
+          "description": "Number of scratch cards used today."
+        },
+        "lastScratchDate": {
+          "type": "string",
+          "description": "The last date the user scratched a card, in YYYY-MM-DD format."
         }
       },
       "required": [

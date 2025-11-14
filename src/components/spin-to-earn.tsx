@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useTransition, useEffect } from "react";
+import { useState, useMemo, useTransition } from "react";
 import {
   Card,
   CardContent,
@@ -12,16 +12,17 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Clapperboard,
   Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, runTransaction, serverTimestamp } from "firebase/firestore";
+import { format } from "date-fns";
 
-const COINS_PER_AD = 25;
 const spinPrizes = [1, 2, 0, 1, 2, 3, 1, 0];
 const TOTAL_PRIZES = spinPrizes.length;
+const DAILY_SPIN_LIMIT = 20;
+
 
 const OraCoin = ({ className }: { className?: string }) => (
     <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -108,13 +109,23 @@ export default function SpinToEarn() {
   const { data: userProfile, loading: userProfileLoading, refetch } = useDoc<any>(userDocRef?.path);
 
   const [isSpinning, startSpinning] = useTransition();
-  const [isAdRunning, startAd] = useTransition();
+  const [isClaiming, startClaiming] = useTransition();
   const [animationTrigger, setAnimationTrigger] = useState(0);
   const [rotation, setRotation] = useState(0);
   const { toast } = useToast();
 
+  const spinsToday = userProfile?.spinsToday || 0;
+  const canSpin = spinsToday < DAILY_SPIN_LIMIT;
+
   const handleSpin = () => {
-    if (isSpinning || isAdRunning) {
+    if (isSpinning || isClaiming || !canSpin) {
+       if (!canSpin) {
+        toast({
+          title: "Daily limit reached",
+          description: `You have used all your ${DAILY_SPIN_LIMIT} spins for today.`,
+          variant: "destructive"
+        });
+      }
       return;
     }
     
@@ -134,16 +145,26 @@ export default function SpinToEarn() {
         
         if (!user || !firestore) return;
         const userRef = doc(firestore, 'users', user.uid);
-        
+        const today = format(new Date(), 'yyyy-MM-dd');
+
         try {
             await runTransaction(firestore, async (transaction) => {
               const userDoc = await transaction.get(userRef);
               if (!userDoc.exists()) throw new Error("User document does not exist.");
               
-              const newBalance = (userDoc.data().coinBalance || 0) + prizeAmount;
+              const userData = userDoc.data();
+              const currentSpins = userData.lastSpinDate === today ? userData.spinsToday : 0;
+              
+              if(currentSpins >= DAILY_SPIN_LIMIT) {
+                throw new Error("Daily spin limit reached.");
+              }
+
+              const newBalance = (userData.coinBalance || 0) + prizeAmount;
               
               const updates: any = {
                   coinBalance: newBalance,
+                  spinsToday: currentSpins + 1,
+                  lastSpinDate: today,
               };
 
               transaction.update(userRef, updates);
@@ -183,38 +204,48 @@ export default function SpinToEarn() {
     });
   }
 
-  const handleWatchAd = () => {
-    if (isSpinning || isAdRunning || !user || !firestore) return;
-    startAd(async () => {
-       await new Promise(resolve => setTimeout(resolve, 3000));
+  const handleClaimSpin = () => {
+    if (!user || !firestore || canSpin) return;
+
+    startClaiming(async () => {
+       await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate watching an ad
        const userRef = doc(firestore, 'users', user.uid);
-       const transactionRef = doc(collection(userRef, 'transactions'));
        
        try {
             await runTransaction(firestore, async (transaction) => {
                 const userDoc = await transaction.get(userRef);
                 if (!userDoc.exists()) throw new Error("User not found");
 
-                const newBalance = (userDoc.data().coinBalance || 0) + COINS_PER_AD;
-                transaction.update(userRef, { coinBalance: newBalance });
-                transaction.set(transactionRef, {
+                const currentSpins = userDoc.data().spinsToday || 0;
+                if (currentSpins < DAILY_SPIN_LIMIT) {
+                    throw new Error("You can still spin!");
+                }
+                
+                transaction.update(userRef, { spinsToday: currentSpins - 1 });
+
+                const transactionRef = doc(collection(userRef, 'transactions'));
+                 transaction.set(transactionRef, {
                     type: 'ad' as const,
-                    amount: COINS_PER_AD,
+                    amount: 0, // No coin reward, just a spin
                     timestamp: serverTimestamp(),
                 });
             });
-            setAnimationTrigger(Date.now());
+            toast({
+                title: "Spin Claimed!",
+                description: "You have received one extra spin.",
+            });
             refetch();
        } catch (error: any) {
-            console.error("Ad reward transaction failed: ", error);
-             toast({
-                title: error.message || "An unexpected error occurred",
-                description: "Could not claim ad reward. Please try again.",
+            toast({
+                title: "Claim Failed",
+                description: error.message || "Could not claim a spin. Please try again.",
                 variant: "destructive"
             });
        }
     });
   };
+
+  const remainingSpins = DAILY_SPIN_LIMIT - spinsToday;
 
   return (
     <Card className="w-full max-w-md shadow-lg relative overflow-visible">
@@ -222,7 +253,9 @@ export default function SpinToEarn() {
         <div className="flex justify-between items-center">
           <div>
             <CardTitle className="font-headline">Your Balance</CardTitle>
-            <CardDescription>ORA coins earned from tasks</CardDescription>
+            <CardDescription>
+                {userProfileLoading ? '...' : `${remainingSpins < 0 ? 0 : remainingSpins} spins left today`}
+            </CardDescription>
           </div>
           <div className="relative">
             <div className="flex items-center gap-2 bg-accent/30 text-accent-foreground p-2 rounded-lg">
@@ -243,25 +276,24 @@ export default function SpinToEarn() {
         </div>
       </CardHeader>
       <CardContent className="flex flex-col items-center justify-center space-y-4">
-        <Wheel rotation={rotation} onSpin={handleSpin} isSpinning={isSpinning} />
+        <Wheel rotation={rotation} onSpin={handleSpin} isSpinning={isSpinning || !canSpin} />
       </CardContent>
       <CardFooter>
-        <Button
-          variant="outline"
-          className="w-full border-accent text-accent-foreground hover:bg-accent/20 hover:text-accent-foreground"
-          onClick={handleWatchAd}
-          disabled={isSpinning || isAdRunning}
-        >
-          {isAdRunning ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Rewarding...
-            </>
-          ) : (
-            <>
-              <Clapperboard className="mr-2 h-4 w-4" /> Watch Ad & Earn {COINS_PER_AD} ORA
-            </>
-          )}
-        </Button>
+         {!canSpin && (
+          <Button
+            className="w-full"
+            onClick={handleClaimSpin}
+            disabled={isClaiming || isSpinning}
+          >
+            {isClaiming ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Claiming...
+              </>
+            ) : (
+              "Claim Spin"
+            )}
+          </Button>
+        )}
       </CardFooter>
     </Card>
   );

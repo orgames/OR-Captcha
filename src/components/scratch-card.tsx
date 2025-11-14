@@ -15,9 +15,11 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, runTransaction, serverTimestamp } from "firebase/firestore";
+import { format } from "date-fns";
 
 const scratchPrizes = [1, 5, 10, 2, 25, 0, 5, 2, 50, 0];
 const SCRATCH_RADIUS = 40;
+const DAILY_SCRATCH_LIMIT = 20;
 
 const OraCoin = ({ className }: { className?: string }) => (
   <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -43,11 +45,15 @@ export default function ScratchCard() {
   const { data: userProfile, loading: userProfileLoading, refetch } = useDoc<any>(userDocRef?.path);
 
   const [isGettingCard, startGettingCard] = useTransition();
+  const [isClaiming, startClaiming] = useTransition();
   const [animationTrigger, setAnimationTrigger] = useState(0);
   const [prizeAmount, setPrizeAmount] = useState<number | null>(null);
   const [isCardScratched, setIsCardScratched] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
+
+  const scratchesToday = userProfile?.scratchesToday || 0;
+  const canScratch = scratchesToday < DAILY_SCRATCH_LIMIT;
 
   const setupCanvas = (prize: number) => {
     const canvas = canvasRef.current;
@@ -77,7 +83,14 @@ export default function ScratchCard() {
   };
   
   const handleGetNewCard = () => {
-    if (isGettingCard || !user || !firestore) {
+    if (isGettingCard || !user || !firestore || !canScratch || !isCardScratched) {
+      if(!canScratch) {
+        toast({
+          title: "Daily limit reached",
+          description: `You have used all your ${DAILY_SCRATCH_LIMIT} scratches for today.`,
+          variant: "destructive"
+        })
+      }
       return;
     }
 
@@ -85,6 +98,7 @@ export default function ScratchCard() {
       const userRef = doc(firestore, 'users', user.uid);
       const newPrize = scratchPrizes[Math.floor(Math.random() * scratchPrizes.length)];
       setPrizeAmount(newPrize);
+      const today = format(new Date(), 'yyyy-MM-dd');
 
       try {
         await runTransaction(firestore, async (transaction) => {
@@ -93,10 +107,19 @@ export default function ScratchCard() {
             throw new Error("User document does not exist.");
           }
           
-          const newBalance = (userDoc.data().coinBalance || 0) + newPrize;
+          const userData = userDoc.data();
+          const currentScratches = userData.lastScratchDate === today ? userData.scratchesToday : 0;
+          
+          if (currentScratches >= DAILY_SCRATCH_LIMIT) {
+              throw new Error("Daily scratch limit reached.");
+          }
+          
+          const newBalance = (userData.coinBalance || 0) + newPrize;
           
           const updates: any = {
-            coinBalance: newBalance
+            coinBalance: newBalance,
+            scratchesToday: currentScratches + 1,
+            lastScratchDate: today
           };
 
           transaction.update(userRef, updates);
@@ -139,6 +162,46 @@ export default function ScratchCard() {
       }
     });
   };
+
+  const handleClaimScratch = () => {
+     if (!user || !firestore || canScratch) return;
+
+     startClaiming(async () => {
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate watching an ad
+        const userRef = doc(firestore, 'users', user.uid);
+        try {
+            await runTransaction(firestore, async (transaction) => {
+                const userDoc = await transaction.get(userRef);
+                if (!userDoc.exists()) throw new Error("User not found");
+
+                const currentScratches = userDoc.data().scratchesToday || 0;
+                if (currentScratches < DAILY_SCRATCH_LIMIT) {
+                    throw new Error("You can still scratch!");
+                }
+
+                transaction.update(userRef, { scratchesToday: currentScratches - 1 });
+
+                const transactionRef = doc(collection(userRef, 'transactions'));
+                 transaction.set(transactionRef, {
+                    type: 'ad' as const,
+                    amount: 0, // No coin reward, just a spin
+                    timestamp: serverTimestamp(),
+                });
+            });
+            toast({
+                title: "Scratch Claimed!",
+                description: "You have received one extra scratch.",
+            });
+            refetch();
+        } catch (error: any) {
+            toast({
+                title: "Claim Failed",
+                description: error.message || "Could not claim a scratch. Please try again.",
+                variant: "destructive"
+            });
+        }
+     });
+  }
   
   const getScratchPercentage = () => {
     const canvas = canvasRef.current;
@@ -230,6 +293,8 @@ export default function ScratchCard() {
       canvas.ontouchend = null;
     };
   };
+  
+  const remainingScratches = DAILY_SCRATCH_LIMIT - scratchesToday;
 
   return (
     <Card className="w-full max-w-md shadow-lg relative overflow-visible">
@@ -237,7 +302,9 @@ export default function ScratchCard() {
         <div className="flex justify-between items-center">
           <div>
             <CardTitle className="font-headline">Your Balance</CardTitle>
-            <CardDescription>ORA coins earned from tasks</CardDescription>
+            <CardDescription>
+                {userProfileLoading ? '...' : `${remainingScratches < 0 ? 0 : remainingScratches} scratches left today`}
+            </CardDescription>
           </div>
           <div className="relative">
             <div className="flex items-center gap-2 bg-accent/30 text-accent-foreground p-2 rounded-lg">
@@ -267,18 +334,33 @@ export default function ScratchCard() {
           onTouchStart={handleTouchStart}
         />
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex flex-col gap-2">
         <Button
           variant="outline"
           className="w-full border-accent text-accent-foreground hover:bg-accent/20 hover:text-accent-foreground"
           onClick={handleGetNewCard}
-          disabled={isGettingCard || !isCardScratched}
+          disabled={isGettingCard || !isCardScratched || !canScratch}
         >
           {isGettingCard ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : null}
           Get New Card
         </Button>
+         {!canScratch && (
+            <Button
+              className="w-full"
+              onClick={handleClaimScratch}
+              disabled={isClaiming}
+            >
+              {isClaiming ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Claiming...
+                </>
+              ) : (
+                "Claim Scratch"
+              )}
+            </Button>
+          )}
       </CardFooter>
     </Card>
   );
