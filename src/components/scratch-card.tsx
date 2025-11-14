@@ -14,13 +14,12 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, collection, setDoc, serverTimestamp, increment, runTransaction } from "firebase/firestore";
-import { errorEmitter } from "@/firebase/error-emitter";
-import { FirestorePermissionError } from "@/firebase/errors";
+import { doc, collection, runTransaction, serverTimestamp, Timestamp } from "firebase/firestore";
 
 const scratchPrizes = [1, 5, 10, 2, 25, 0, 5, 2, 50, 0];
 const SCRATCH_RADIUS = 20;
 const MAX_SCRATCHES_PER_DAY = 20;
+const COOLDOWN_MINUTES = 60;
 
 const OraCoin = ({ className }: { className?: string }) => (
   <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -34,6 +33,42 @@ const OraCoinReward = ({ className }: { className?: string }) => (
   </div>
 );
 
+const CountdownTimer = ({ targetDate }: { targetDate: Date }) => {
+    const calculateTimeLeft = () => {
+        const difference = +targetDate - +new Date();
+        let timeLeft = {};
+
+        if (difference > 0) {
+            timeLeft = {
+                minutes: Math.floor((difference / 1000 / 60) % 60),
+                seconds: Math.floor((difference / 1000) % 60),
+            };
+        }
+        return timeLeft;
+    };
+
+    const [timeLeft, setTimeLeft] = useState(calculateTimeLeft);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setTimeLeft(calculateTimeLeft());
+        }, 1000);
+        return () => clearTimeout(timer);
+    });
+
+    const timerComponents = Object.entries(timeLeft);
+
+    return (
+        <div className="text-center font-mono">
+            {timerComponents.length ? (
+                 <span>Refills in {String(timerComponents[0][1]).padStart(2, '0')}:{String(timerComponents[1][1]).padStart(2, 'O')}</span>
+            ) : (
+                <span>Ready to scratch!</span>
+            )}
+        </div>
+    );
+};
+
 export default function ScratchCard() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -43,7 +78,7 @@ export default function ScratchCard() {
     return doc(firestore, `users/${user.uid}`);
   }, [user, firestore]);
 
-  const { data: userProfile, loading: userProfileLoading } = useDoc<any>(userDocRef?.path);
+  const { data: userProfile, loading: userProfileLoading, refetch } = useDoc<any>(userDocRef?.path);
 
   const [isGettingCard, startGettingCard] = useTransition();
   const [animationTrigger, setAnimationTrigger] = useState(0);
@@ -52,8 +87,54 @@ export default function ScratchCard() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
 
-  const scratchesLeft = userProfile ? MAX_SCRATCHES_PER_DAY - (userProfile.scratchesToday || 0) : 0;
-  const canScratch = scratchesLeft > 0 && !userProfileLoading;
+  const scratchesToday = userProfile?.scratchesToday || 0;
+  const scratchesCooldownEnd = userProfile?.scratchesCooldownEnd?.toDate();
+  const now = new Date();
+
+  const isScratchCooldownActive = scratchesCooldownEnd && scratchesCooldownEnd > now;
+
+  useEffect(() => {
+    if (!firestore || !user || !userProfile) return;
+    if (isScratchCooldownActive || scratchesToday < MAX_SCRATCHES_PER_DAY) return;
+    
+    const userRef = doc(firestore, 'users', user.uid);
+    const newCooldownDate = new Date();
+    newCooldownDate.setMinutes(newCooldownDate.getMinutes() + COOLDOWN_MINUTES);
+    
+    runTransaction(firestore, async (transaction) => {
+        transaction.update(userRef, { scratchesCooldownEnd: Timestamp.fromDate(newCooldownDate) });
+    }).then(() => {
+        refetch();
+    });
+
+  }, [isScratchCooldownActive, scratchesToday, firestore, user, userProfile, refetch]);
+  
+  useEffect(() => {
+    if (!firestore || !user || !userProfile) return;
+    if (!isScratchCooldownActive && scratchesToday > 0) return;
+    if(isScratchCooldownActive && scratchesToday < MAX_SCRATCHES_PER_DAY) return;
+    if(!isScratchCooldownActive && scratchesToday === 0) return;
+
+    const userRef = doc(firestore, 'users', user.uid);
+    
+    runTransaction(firestore, async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      if (!userDoc.exists()) throw new Error("User not found");
+      
+      const docData = userDoc.data();
+      const currentCooldown = docData.scratchesCooldownEnd?.toDate();
+
+      if (currentCooldown && currentCooldown < new Date()) {
+        transaction.update(userRef, { scratchesToday: 0 });
+      }
+    }).then(() => {
+      refetch();
+    });
+
+  }, [isScratchCooldownActive, firestore, user, userProfile, scratchesToday, refetch]);
+
+  const scratchesLeft = isScratchCooldownActive ? 0 : MAX_SCRATCHES_PER_DAY - scratchesToday;
+  const canScratch = scratchesLeft > 0 && !userProfileLoading && !isScratchCooldownActive;
 
   const setupCanvas = (prize: number) => {
     const canvas = canvasRef.current;
@@ -90,7 +171,7 @@ export default function ScratchCard() {
       if (!canScratch) {
         toast({
           title: "Scratch Limit Reached",
-          description: `You have used all ${MAX_SCRATCHES_PER_DAY} scratch cards for today. Come back tomorrow!`,
+          description: `You have used all ${MAX_SCRATCHES_PER_DAY} scratch cards. Please wait for the cooldown.`,
           variant: "destructive",
         });
       }
@@ -108,26 +189,33 @@ export default function ScratchCard() {
           if (!userDoc.exists()) {
             throw new Error("User document does not exist.");
           }
-
-          let newScratchesToday = userDoc.data().scratchesToday || 0;
-          const lastScratchDate = userDoc.data().lastScratchDate || new Date(0).toISOString().split('T')[0];
-          const today = new Date().toISOString().split('T')[0];
-
-          if (lastScratchDate !== today) {
-            newScratchesToday = 0;
+          
+          const currentScratches = userDoc.data().scratchesToday || 0;
+          const currentCooldown = userDoc.data().scratchesCooldownEnd?.toDate();
+          
+          if (currentCooldown && currentCooldown > new Date()) {
+            throw new Error("Scratches are on cooldown.");
           }
+
+          if (currentScratches >= MAX_SCRATCHES_PER_DAY) {
+            throw new Error("Scratch limit reached.");
+          }
+
+          const newScratchesToday = currentScratches + 1;
+          const newBalance = (userDoc.data().coinBalance || 0) + newPrize;
+          
+          const updates: any = {
+            scratchesToday: newScratchesToday,
+            coinBalance: newBalance
+          };
 
           if (newScratchesToday >= MAX_SCRATCHES_PER_DAY) {
-            throw new Error("Scratch limit reached for today.");
+              const newCooldownDate = new Date();
+              newCooldownDate.setMinutes(newCooldownDate.getMinutes() + COOLDOWN_MINUTES);
+              updates.scratchesCooldownEnd = Timestamp.fromDate(newCooldownDate);
           }
 
-          const newBalance = (userDoc.data().coinBalance || 0) + newPrize;
-
-          transaction.update(userRef, {
-            scratchesToday: newScratchesToday + 1,
-            lastScratchDate: today,
-            coinBalance: newBalance
-          });
+          transaction.update(userRef, updates);
 
           if (newPrize > 0) {
               const transactionRef = doc(collection(userRef, 'transactions'));
@@ -163,6 +251,8 @@ export default function ScratchCard() {
         });
         setIsCardScratched(true); // Reset state on failure
         setPrizeAmount(null);
+      } finally {
+        refetch();
       }
     });
   };
@@ -296,7 +386,13 @@ export default function ScratchCard() {
           onTouchStart={handleTouchStart}
         />
         <div className="text-center text-muted-foreground">
-            { userProfileLoading ? <p>Loading scratches...</p> : <p>You have <span className="font-bold text-foreground">{scratchesLeft}</span> scratches left today.</p> }
+            { userProfileLoading ? <p>Loading scratches...</p> : 
+                isScratchCooldownActive && scratchesCooldownEnd ? (
+                    <CountdownTimer targetDate={scratchesCooldownEnd} />
+                ) : (
+                    <p>You have <span className="font-bold text-foreground">{scratchesLeft}</span> scratches left.</p>
+                )
+            }
         </div>
       </CardContent>
       <CardFooter>

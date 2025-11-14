@@ -32,19 +32,19 @@
           "type": "number",
           "description": "The number of times the user has spun the wheel today."
         },
-        "lastSpinDate": {
+        "spinsCooldownEnd": {
           "type": "string",
-          "format": "date",
-          "description": "The date of the user's last spin (YYYY-MM-DD)."
+          "format": "date-time",
+          "description": "The timestamp when the spin cooldown period ends."
         },
         "scratchesToday": {
           "type": "number",
           "description": "The number of times the user has scratched a card today."
         },
-        "lastScratchDate": {
+        "scratchesCooldownEnd": {
           "type": "string",
-          "format": "date",
-          "description": "The date of the user's last scratch (YYYY-MM-DD)."
+          "format": "date-time",
+          "description": "The timestamp when the scratch cooldown period ends."
         }
       },
       "required": [
