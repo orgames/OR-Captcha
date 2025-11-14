@@ -21,7 +21,7 @@ import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
 const COINS_PER_AD = 25;
-const spinPrizes = [1, 5, 10, 2, 20, 0, 5, 2];
+const spinPrizes = [1, 2, 0, 1, 2, 3, 1, 0];
 const TOTAL_PRIZES = spinPrizes.length;
 
 const OraCoin = ({ className }: { className?: string }) => (
@@ -69,11 +69,13 @@ const Wheel = ({ rotation }: { rotation: number }) => (
           const textAngle = angle * Math.PI / 180;
           const textX = 100 + 70 * Math.cos(textAngle);
           const textY = 100 + 70 * Math.sin(textAngle);
+          
+          const prizeText = prize === 0 && i === 2 ? "Better Luck" : prize;
 
           return (
             <g key={i}>
               <path d={d} fill={i % 2 === 0 ? 'hsl(var(--primary))' : 'hsl(var(--card))'} stroke="hsl(var(--border))" strokeWidth="1"/>
-              <text x={textX} y={textY} fill="hsl(var(--primary-foreground))" textAnchor="middle" dominantBaseline="middle" transform={`rotate(${angle + 90}, ${textX}, ${textY})`} className="font-bold text-lg">{prize}</text>
+              <text x={textX} y={textY} fill="hsl(var(--primary-foreground))" textAnchor="middle" dominantBaseline="middle" transform={`rotate(${angle + 90}, ${textX}, ${textY})`} className="font-bold text-lg">{prizeText}</text>
             </g>
           );
         })}
