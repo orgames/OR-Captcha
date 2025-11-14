@@ -22,15 +22,15 @@ const SCRATCH_RADIUS = 40;
 const DAILY_SCRATCH_LIMIT = 20;
 const COINS_PER_AD = 0.5;
 
-const OraCoin = ({ className }: { className?: string }) => (
+const Coin = ({ className }: { className?: string }) => (
   <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
-    <span className="text-lg font-bold text-accent-foreground">O</span>
+    <span className="text-lg font-bold text-accent-foreground">S</span>
   </div>
 );
 
-const OraCoinReward = ({ className }: { className?: string }) => (
+const CoinReward = ({ className }: { className?: string }) => (
   <div className={`w-12 h-12 rounded-full bg-accent flex items-center justify-center ${className}`}>
-    <span className="text-2xl font-bold text-accent-foreground">O</span>
+    <span className="text-2xl font-bold text-accent-foreground">S</span>
   </div>
 );
 
@@ -71,7 +71,7 @@ export default function ScratchCard() {
     ctx.fillStyle = 'hsl(var(--accent))';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(prize > 0 ? `${prize} ORA` : 'Better Luck!', canvas.width / 2, canvas.height / 2);
+    ctx.fillText(prize > 0 ? `${prize} Coins` : 'Better Luck!', canvas.width / 2, canvas.height / 2);
 
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = 'hsl(var(--muted))';
@@ -141,7 +141,7 @@ export default function ScratchCard() {
             setAnimationTrigger(Date.now());
              toast({
                 title: "You Won!",
-                description: `You've won ${newPrize} ORA coins.`,
+                description: `You've won ${newPrize} coins.`,
             });
         } else {
              toast({
@@ -193,7 +193,7 @@ export default function ScratchCard() {
             setAnimationTrigger(Date.now());
             toast({
                 title: "You Won!",
-                description: `You've won ${newPrize} ORA coins.`,
+                description: `You've won ${newPrize} coins.`,
             });
         } catch (error: any) {
             console.error("Watch ad transaction failed: ", error);
@@ -299,7 +299,7 @@ export default function ScratchCard() {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             const currentPrize = prizeAmount ?? 0;
-            ctx.fillText(currentPrize > 0 ? `${currentPrize} ORA` : 'Better Luck!', canvas.width / 2, canvas.height / 2);
+            ctx.fillText(currentPrize > 0 ? `${currentPrize} Coins` : 'Better Luck!', canvas.width / 2, canvas.height / 2);
         }
     }
   }
@@ -353,7 +353,7 @@ export default function ScratchCard() {
           </div>
           <div className="relative">
             <div className="flex items-center gap-2 bg-accent/30 text-accent-foreground p-2 rounded-lg">
-              <OraCoin className="w-8 h-8" />
+              <Coin className="w-8 h-8" />
               <span className="text-3xl font-bold font-headline">
                 {userProfileLoading ? "..." : userProfile?.coinBalance || 0}
               </span>
@@ -363,7 +363,7 @@ export default function ScratchCard() {
                 key={animationTrigger}
                 className="absolute inset-0 flex items-center justify-center"
               >
-                <OraCoinReward className="animate-coin-reward" />
+                <CoinReward className="animate-coin-reward" />
               </div>
             )}
           </div>
@@ -402,7 +402,7 @@ export default function ScratchCard() {
           ) : (
             <Clapperboard className="mr-2 h-4 w-4" />
           )}
-          Watch Ad &amp; Earn {COINS_PER_AD} ORA
+          Watch Ad &amp; Earn {COINS_PER_AD} Coins
         </Button>
          {!canScratch && (
             <Button
@@ -423,7 +423,3 @@ export default function ScratchCard() {
     </Card>
   );
 }
-
-    
-
-    

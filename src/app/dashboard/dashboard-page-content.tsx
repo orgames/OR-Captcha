@@ -35,12 +35,12 @@ export default function DashboardPageContent() {
       </header>
       <div className="flex flex-col items-center gap-2 my-8">
         <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-4xl font-bold text-primary-foreground">O</span>
+            <span className="text-4xl font-bold text-primary-foreground">S</span>
         </div>
         <h1 className="text-4xl font-headline font-bold text-center text-foreground">
-          ORA Earn
+          Spin and Earn
         </h1>
-        <p className="text-muted-foreground text-center">Play games to earn ORA coins!</p>
+        <p className="text-muted-foreground text-center">Play games to earn coins!</p>
       </div>
       <Tabs defaultValue="spin" className="w-full max-w-md">
         <TabsList className="grid w-full grid-cols-2">

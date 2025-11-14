@@ -17,9 +17,9 @@ import { collection, doc, getDoc, runTransaction, serverTimestamp, type Firestor
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
-const OraCoin = ({ className }: { className?: string }) => (
+const Coin = ({ className }: { className?: string }) => (
     <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
-        <span className="text-lg font-bold text-accent-foreground">O</span>
+        <span className="text-lg font-bold text-accent-foreground">S</span>
     </div>
 );
 
@@ -58,7 +58,7 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
     if (sendAmount > currentBalance) {
       toast({
         title: "Insufficient Funds",
-        description: "You do not have enough ORA coins to make this transfer.",
+        description: "You do not have enough coins to make this transfer.",
         variant: "destructive",
       });
       return;
@@ -119,7 +119,7 @@ function SendCoinForm({ currentUser, currentBalance, onSent }: { currentUser: an
 
         toast({
           title: "Success",
-          description: `Successfully sent ${sendAmount} ORA to the recipient.`,
+          description: `Successfully sent ${sendAmount} coins to the recipient.`,
         });
         onSent();
       } catch (error: any) {
@@ -225,10 +225,10 @@ export function Wallet() {
           <div className="flex justify-between items-center">
             <div>
               <CardTitle className="font-headline">Your Balance</CardTitle>
-              <CardDescription>Total ORA coins earned</CardDescription>
+              <CardDescription>Total coins earned</CardDescription>
             </div>
             <div className="flex items-center gap-2 bg-accent/30 text-accent-foreground p-2 rounded-lg">
-              <OraCoin className="w-8 h-8" />
+              <Coin className="w-8 h-8" />
               <span className="text-3xl font-bold font-headline">
                 {userProfileLoading ? '...' : userProfile?.coinBalance || 0}
               </span>
@@ -239,12 +239,12 @@ export function Wallet() {
           <Dialog open={isSendDialogOpen} onOpenChange={setSendDialogOpen}>
             <DialogTrigger asChild>
                <Button className="w-full">
-                <Send className="mr-2 h-4 w-4" /> Send ORA
+                <Send className="mr-2 h-4 w-4" /> Send Coins
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Send ORA Coins</DialogTitle>
+                <DialogTitle>Send Coins</DialogTitle>
                 <DialogDescription>
                   Enter the recipient's wallet address and the amount to send.
                 </DialogDescription>

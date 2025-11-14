@@ -26,15 +26,15 @@ const DAILY_SPIN_LIMIT = 20;
 const COINS_PER_AD = 0.5;
 
 
-const OraCoin = ({ className }: { className?: string }) => (
+const Coin = ({ className }: { className?: string }) => (
     <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
-        <span className="text-lg font-bold text-accent-foreground">O</span>
+        <span className="text-lg font-bold text-accent-foreground">S</span>
     </div>
 );
 
-const OraCoinReward = ({ className }: { className?: string }) => (
+const CoinReward = ({ className }: { className?: string }) => (
     <div className={`w-12 h-12 rounded-full bg-accent flex items-center justify-center ${className}`}>
-        <span className="text-2xl font-bold text-accent-foreground">O</span>
+        <span className="text-2xl font-bold text-accent-foreground">S</span>
     </div>
 );
 
@@ -186,7 +186,7 @@ export default function SpinToEarn() {
                 setAnimationTrigger(Date.now());
                 toast({
                     title: "You Won!",
-                    description: `You've won ${prizeAmount} ORA coins.`,
+                    description: `You've won ${prizeAmount} coins.`,
                 });
             } else {
                 toast({
@@ -235,7 +235,7 @@ export default function SpinToEarn() {
             setAnimationTrigger(Date.now());
             toast({
                 title: "You Won!",
-                description: `You've won ${newPrize} ORA coins.`,
+                description: `You've won ${newPrize} coins.`,
             });
         } catch (error: any) {
             console.error("Watch ad transaction failed: ", error);
@@ -306,7 +306,7 @@ export default function SpinToEarn() {
           </div>
           <div className="relative">
             <div className="flex items-center gap-2 bg-accent/30 text-accent-foreground p-2 rounded-lg">
-              <OraCoin className="w-8 h-8" />
+              <Coin className="w-8 h-8" />
               <span className="text-3xl font-bold font-headline">
                 {userProfileLoading ? '...' : userProfile?.coinBalance || 0}
               </span>
@@ -316,7 +316,7 @@ export default function SpinToEarn() {
                 key={animationTrigger}
                 className="absolute inset-0 flex items-center justify-center"
               >
-                <OraCoinReward className="animate-coin-reward" />
+                <CoinReward className="animate-coin-reward" />
               </div>
             )}
           </div>
@@ -337,7 +337,7 @@ export default function SpinToEarn() {
           ) : (
             <Clapperboard className="mr-2 h-4 w-4" />
           )}
-          Watch Ad &amp; Earn {COINS_PER_AD} ORA
+          Watch Ad &amp; Earn {COINS_PER_AD} Coins
         </Button>
          {!canSpin && (
           <Button
@@ -358,7 +358,3 @@ export default function SpinToEarn() {
     </Card>
   );
 }
-
-    
-
-    

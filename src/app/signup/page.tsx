@@ -9,11 +9,11 @@ export default function SignupPage() {
       <main className="flex min-h-screen flex-col items-center justify-center p-8">
         <div className="flex flex-col items-center gap-2 mb-8">
           <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-4xl font-bold text-primary-foreground">O</span>
+            <span className="text-4xl font-bold text-primary-foreground">S</span>
           </div>
-          <h1 className="text-4xl font-bold text-center">Create your ORA Captcha Account</h1>
+          <h1 className="text-4xl font-bold text-center">Create your Spin and Earn Account</h1>
           <p className="text-muted-foreground text-center">
-            Sign up to start earning ORA coins.
+            Sign up to start earning coins.
           </p>
         </div>
         <SignupForm />
