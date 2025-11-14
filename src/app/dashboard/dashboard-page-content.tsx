@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@/firebase/auth/use-user";
 import { UserNav } from "@/components/auth/user-nav";
 import SpinToEarn from "@/components/spin-to-earn";
+import ScratchCard from "@/components/scratch-card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function DashboardPageContent() {
   const { user, loading } = useUser();
@@ -36,11 +38,22 @@ export default function DashboardPageContent() {
             <span className="text-4xl font-bold text-primary-foreground">O</span>
         </div>
         <h1 className="text-4xl font-headline font-bold text-center text-foreground">
-          ORA Spin & Earn
+          ORA Earn
         </h1>
-        <p className="text-muted-foreground text-center">Spin the wheel to earn ORA coins!</p>
+        <p className="text-muted-foreground text-center">Play games to earn ORA coins!</p>
       </div>
-      <SpinToEarn />
+      <Tabs defaultValue="spin" className="w-full max-w-md">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="spin">Spin & Earn</TabsTrigger>
+          <TabsTrigger value="scratch">Scratch & Earn</TabsTrigger>
+        </TabsList>
+        <TabsContent value="spin">
+          <SpinToEarn />
+        </TabsContent>
+        <TabsContent value="scratch">
+          <ScratchCard />
+        </TabsContent>
+      </Tabs>
     </main>
   );
 }

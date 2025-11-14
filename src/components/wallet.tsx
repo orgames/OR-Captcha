@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useUser, useDoc, useCollection, useFirestore } from "@/firebase";
@@ -24,7 +25,7 @@ const OraCoin = ({ className }: { className?: string }) => (
 
 type Transaction = {
   id: string;
-  type: "captcha" | "ad" | "send" | "receive" | "spin";
+  type: "captcha" | "ad" | "send" | "receive" | "spin" | "scratch";
   amount: number;
   timestamp: {
     toDate: () => Date;
@@ -189,6 +190,7 @@ export function Wallet() {
         case 'captcha':
         case 'ad':
         case 'spin':
+        case 'scratch':
             return {
                 badgeVariant: tx.type === 'ad' ? 'secondary' : 'default' as const,
                 amountText: `+${tx.amount}`,

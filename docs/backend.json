@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -45,7 +46,8 @@
             "ad",
             "send",
             "receive",
-            "spin"
+            "spin",
+            "scratch"
           ],
           "description": "The type of transaction."
         },
