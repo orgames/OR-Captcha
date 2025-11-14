@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Loader2,
+  Clapperboard,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
@@ -22,6 +23,7 @@ import { format } from "date-fns";
 const spinPrizes = [1, 2, 0, 1, 2, 3, 1, 0];
 const TOTAL_PRIZES = spinPrizes.length;
 const DAILY_SPIN_LIMIT = 20;
+const COINS_PER_AD = 25;
 
 
 const OraCoin = ({ className }: { className?: string }) => (
@@ -110,6 +112,7 @@ export default function SpinToEarn() {
 
   const [isSpinning, startSpinning] = useTransition();
   const [isClaiming, startClaiming] = useTransition();
+  const [isAdRunning, startAd] = useTransition();
   const [animationTrigger, setAnimationTrigger] = useState(0);
   const [rotation, setRotation] = useState(0);
   const { toast } = useToast();
@@ -118,7 +121,7 @@ export default function SpinToEarn() {
   const canSpin = spinsToday < DAILY_SPIN_LIMIT;
 
   const handleSpin = () => {
-    if (isSpinning || isClaiming || !canSpin) {
+    if (isSpinning || isClaiming || !canSpin || isAdRunning) {
        if (!canSpin) {
         toast({
           title: "Daily limit reached",
@@ -203,6 +206,50 @@ export default function SpinToEarn() {
         }
     });
   }
+  
+  const handleWatchAd = () => {
+    if (isSpinning || isClaiming || !user || !firestore || isAdRunning) return;
+    startAd(async () => {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const userRef = doc(firestore, 'users', user.uid);
+        const newPrize = COINS_PER_AD;
+
+        try {
+            await runTransaction(firestore, async (transaction) => {
+                const userDoc = await transaction.get(userRef);
+                if (!userDoc.exists()) throw new Error("User document does not exist.");
+                
+                const userData = userDoc.data();
+                const newBalance = (userData.coinBalance || 0) + newPrize;
+                
+                transaction.update(userRef, { coinBalance: newBalance });
+
+                const transactionRef = doc(collection(userRef, 'transactions'));
+                transaction.set(transactionRef, {
+                    type: 'ad' as const,
+                    amount: newPrize,
+                    timestamp: serverTimestamp(),
+                });
+            });
+
+            setAnimationTrigger(Date.now());
+            toast({
+                title: "You Won!",
+                description: `You've won ${newPrize} ORA coins.`,
+            });
+        } catch (error: any) {
+            console.error("Watch ad transaction failed: ", error);
+            toast({
+                title: error.message || "An unexpected error occurred",
+                description: "Could not record your reward. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            refetch();
+        }
+    });
+  };
+
 
   const handleClaimSpin = () => {
     if (!user || !firestore || canSpin) return;
@@ -278,7 +325,20 @@ export default function SpinToEarn() {
       <CardContent className="flex flex-col items-center justify-center space-y-4">
         <Wheel rotation={rotation} onSpin={handleSpin} isSpinning={isSpinning || !canSpin} />
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex flex-col gap-2">
+        <Button
+          variant="outline"
+          className="w-full border-accent text-accent-foreground hover:bg-accent/20 hover:text-accent-foreground"
+          onClick={handleWatchAd}
+          disabled={isSpinning || isClaiming || isAdRunning}
+        >
+          {isAdRunning ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Clapperboard className="mr-2 h-4 w-4" />
+          )}
+          Watch Ad &amp; Earn {COINS_PER_AD} ORA
+        </Button>
          {!canSpin && (
           <Button
             className="w-full"
@@ -298,3 +358,5 @@ export default function SpinToEarn() {
     </Card>
   );
 }
+
+    

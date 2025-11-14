@@ -11,7 +11,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, Clapperboard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, runTransaction, serverTimestamp } from "firebase/firestore";
@@ -20,6 +20,7 @@ import { format } from "date-fns";
 const scratchPrizes = [1, 5, 10, 2, 25, 0, 5, 2, 50, 0];
 const SCRATCH_RADIUS = 40;
 const DAILY_SCRATCH_LIMIT = 20;
+const COINS_PER_AD = 25;
 
 const OraCoin = ({ className }: { className?: string }) => (
   <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -46,6 +47,7 @@ export default function ScratchCard() {
 
   const [isGettingCard, startGettingCard] = useTransition();
   const [isClaiming, startClaiming] = useTransition();
+  const [isAdRunning, startAd] = useTransition();
   const [animationTrigger, setAnimationTrigger] = useState(0);
   const [prizeAmount, setPrizeAmount] = useState<number | null>(null);
   const [isCardScratched, setIsCardScratched] = useState(true);
@@ -83,7 +85,7 @@ export default function ScratchCard() {
   };
   
   const handleGetNewCard = () => {
-    if (isGettingCard || !user || !firestore || !canScratch || !isCardScratched) {
+    if (isGettingCard || !user || !firestore || !canScratch || !isCardScratched || isAdRunning) {
       if(!canScratch) {
         toast({
           title: "Daily limit reached",
@@ -160,6 +162,49 @@ export default function ScratchCard() {
       } finally {
         refetch();
       }
+    });
+  };
+  
+  const handleWatchAd = () => {
+    if (isGettingCard || isClaiming || !user || !firestore || isAdRunning) return;
+    startAd(async () => {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const userRef = doc(firestore, 'users', user.uid);
+        const newPrize = COINS_PER_AD;
+
+        try {
+            await runTransaction(firestore, async (transaction) => {
+                const userDoc = await transaction.get(userRef);
+                if (!userDoc.exists()) throw new Error("User document does not exist.");
+                
+                const userData = userDoc.data();
+                const newBalance = (userData.coinBalance || 0) + newPrize;
+                
+                transaction.update(userRef, { coinBalance: newBalance });
+
+                const transactionRef = doc(collection(userRef, 'transactions'));
+                transaction.set(transactionRef, {
+                    type: 'ad' as const,
+                    amount: newPrize,
+                    timestamp: serverTimestamp(),
+                });
+            });
+
+            setAnimationTrigger(Date.now());
+            toast({
+                title: "You Won!",
+                description: `You've won ${newPrize} ORA coins.`,
+            });
+        } catch (error: any) {
+            console.error("Watch ad transaction failed: ", error);
+            toast({
+                title: error.message || "An unexpected error occurred",
+                description: "Could not record your reward. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            refetch();
+        }
     });
   };
 
@@ -336,8 +381,8 @@ export default function ScratchCard() {
       </CardContent>
       <CardFooter className="flex flex-col gap-2">
         <Button
-          variant="outline"
-          className="w-full border-accent text-accent-foreground hover:bg-accent/20 hover:text-accent-foreground"
+          variant="default"
+          className="w-full"
           onClick={handleGetNewCard}
           disabled={isGettingCard || !isCardScratched || !canScratch}
         >
@@ -345,6 +390,19 @@ export default function ScratchCard() {
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : null}
           Get New Card
+        </Button>
+         <Button
+          variant="outline"
+          className="w-full border-accent text-accent-foreground hover:bg-accent/20 hover:text-accent-foreground"
+          onClick={handleWatchAd}
+          disabled={isGettingCard || isClaiming || isAdRunning}
+        >
+          {isAdRunning ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Clapperboard className="mr-2 h-4 w-4" />
+          )}
+          Watch Ad &amp; Earn {COINS_PER_AD} ORA
         </Button>
          {!canScratch && (
             <Button
@@ -365,3 +423,5 @@ export default function ScratchCard() {
     </Card>
   );
 }
+
+    
