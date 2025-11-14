@@ -36,25 +36,24 @@ const OraCoinReward = ({ className }: { className?: string }) => (
 const CountdownTimer = ({ targetDate }: { targetDate: Date }) => {
     const calculateTimeLeft = () => {
         const difference = +targetDate - +new Date();
-        let timeLeft: { minutes?: number; seconds?: number } = {};
-
         if (difference > 0) {
-            timeLeft = {
+            return {
                 minutes: Math.floor((difference / 1000 / 60) % 60),
                 seconds: Math.floor((difference / 1000) % 60),
             };
         }
-        return timeLeft;
+        return {};
     };
 
-    const [timeLeft, setTimeLeft] = useState(calculateTimeLeft);
+    const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
 
     useEffect(() => {
-        const timer = setTimeout(() => {
+        const timer = setInterval(() => {
             setTimeLeft(calculateTimeLeft());
         }, 1000);
-        return () => clearTimeout(timer);
-    }, [timeLeft, targetDate]);
+
+        return () => clearInterval(timer);
+    }, [targetDate]);
 
     const timerComponents = Object.entries(timeLeft);
 
