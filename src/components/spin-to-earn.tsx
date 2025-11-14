@@ -17,15 +17,11 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, collection, runTransaction, serverTimestamp, Timestamp } from "firebase/firestore";
-import { errorEmitter } from "@/firebase/error-emitter";
-import { FirestorePermissionError } from "@/firebase/errors";
+import { doc, collection, runTransaction, serverTimestamp } from "firebase/firestore";
 
 const COINS_PER_AD = 25;
 const spinPrizes = [1, 2, 0, 1, 2, 3, 1, 0];
 const TOTAL_PRIZES = spinPrizes.length;
-const MAX_SPINS_PER_DAY = 20;
-const COOLDOWN_MINUTES = 60;
 
 const OraCoin = ({ className }: { className?: string }) => (
     <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -39,43 +35,7 @@ const OraCoinReward = ({ className }: { className?: string }) => (
     </div>
 );
 
-const CountdownTimer = ({ targetDate }: { targetDate: Date }) => {
-    const calculateTimeLeft = () => {
-        const difference = +targetDate - +new Date();
-        if (difference > 0) {
-            return {
-                minutes: Math.floor((difference / 1000 / 60) % 60),
-                seconds: Math.floor((difference / 1000) % 60),
-            };
-        }
-        return {};
-    };
-
-    const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
-
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setTimeLeft(calculateTimeLeft());
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [targetDate]);
-
-    const timerComponents = Object.entries(timeLeft);
-
-    return (
-        <div className="text-center font-mono">
-            {timerComponents.length ? (
-                 <span>Refills in {String(timeLeft.minutes).padStart(2, '0')}:{String(timeLeft.seconds).padStart(2, '0')}</span>
-            ) : (
-                <span>Ready to spin!</span>
-            )}
-        </div>
-    );
-};
-
-
-const Wheel = ({ rotation, onSpin, isSpinning, isAdRunning, disabled }: { rotation: number, onSpin: () => void, isSpinning: boolean, isAdRunning: boolean, disabled: boolean }) => (
+const Wheel = ({ rotation, onSpin, isSpinning }: { rotation: number, onSpin: () => void, isSpinning: boolean }) => (
   <div className="relative w-64 h-64 md:w-80 md:h-80 flex items-center justify-center">
     <div
       className="absolute inset-0 transition-transform duration-[5000ms] ease-out"
@@ -124,7 +84,7 @@ const Wheel = ({ rotation, onSpin, isSpinning, isAdRunning, disabled }: { rotati
     <Button
         onClick={onSpin}
         className="w-24 h-24 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-xl font-bold shadow-lg"
-        disabled={isSpinning || isAdRunning || disabled}
+        disabled={isSpinning}
         style={{ zIndex: 10 }}
     >
         {isSpinning ? (
@@ -152,70 +112,9 @@ export default function SpinToEarn() {
   const [animationTrigger, setAnimationTrigger] = useState(0);
   const [rotation, setRotation] = useState(0);
   const { toast } = useToast();
-  
-  const spinsToday = userProfile?.spinsToday || 0;
-  const spinsCooldownEnd = userProfile?.spinsCooldownEnd?.toDate();
-  const now = new Date();
-  
-  const isSpinCooldownActive = spinsCooldownEnd && spinsCooldownEnd > now;
-  
-  // If cooldown is active, reset attempts.
-  useEffect(() => {
-    if (!firestore || !user || !userProfile) return;
-    if (isSpinCooldownActive || spinsToday < MAX_SPINS_PER_DAY) return;
-    
-    // This effect runs if there is no active cooldown AND spins are maxed out.
-    // This state shouldn't really be possible if logic is correct, but as a fallback,
-    // we can set a new cooldown.
-    const userRef = doc(firestore, 'users', user.uid);
-    const newCooldownDate = new Date();
-    newCooldownDate.setMinutes(newCooldownDate.getMinutes() + COOLDOWN_MINUTES);
-    
-    runTransaction(firestore, async (transaction) => {
-        transaction.update(userRef, { spinsCooldownEnd: Timestamp.fromDate(newCooldownDate) });
-    }).then(() => {
-        refetch();
-    });
-
-  }, [isSpinCooldownActive, spinsToday, firestore, user, userProfile, refetch]);
-
-  // Reset spins if cooldown is over
-  useEffect(() => {
-    if (!firestore || !user || !userProfile) return;
-    if (!isSpinCooldownActive && spinsToday > 0) return; // Not on cooldown, no need to reset
-    if(isSpinCooldownActive && spinsToday < MAX_SPINS_PER_DAY) return; // Cooldown for ad, not for spins.
-    if(!isSpinCooldownActive && spinsToday === 0) return; // Already reset
-
-    const userRef = doc(firestore, 'users', user.uid);
-    
-    runTransaction(firestore, async (transaction) => {
-      const userDoc = await transaction.get(userRef);
-      if (!userDoc.exists()) throw new Error("User not found");
-      
-      const docData = userDoc.data();
-      const currentCooldown = docData.spinsCooldownEnd?.toDate();
-
-      if (currentCooldown && currentCooldown < new Date()) {
-        transaction.update(userRef, { spinsToday: 0 });
-      }
-    }).then(() => {
-      refetch();
-    });
-
-  }, [isSpinCooldownActive, firestore, user, userProfile, spinsToday, refetch]);
-
-  const spinsLeft = isSpinCooldownActive ? 0 : MAX_SPINS_PER_DAY - spinsToday;
-  const canSpin = spinsLeft > 0 && !userProfileLoading && !isSpinCooldownActive;
 
   const handleSpin = () => {
-    if (isSpinning || isAdRunning || !canSpin) {
-      if (!canSpin) {
-        toast({
-          title: "Spin Limit Reached",
-          description: `You have used all your ${MAX_SPINS_PER_DAY} spins. Please wait for the cooldown.`,
-          variant: "destructive",
-        });
-      }
+    if (isSpinning || isAdRunning) {
       return;
     }
     
@@ -241,30 +140,11 @@ export default function SpinToEarn() {
               const userDoc = await transaction.get(userRef);
               if (!userDoc.exists()) throw new Error("User document does not exist.");
               
-              const currentSpins = userDoc.data().spinsToday || 0;
-              const currentCooldown = userDoc.data().spinsCooldownEnd?.toDate();
-
-              if (currentCooldown && currentCooldown > new Date()) {
-                  throw new Error("Spin is on cooldown.");
-              }
-
-              if (currentSpins >= MAX_SPINS_PER_DAY) {
-                  throw new Error("Spin limit reached for today.");
-              }
-              
-              const newSpinsToday = currentSpins + 1;
               const newBalance = (userDoc.data().coinBalance || 0) + prizeAmount;
               
               const updates: any = {
                   coinBalance: newBalance,
-                  spinsToday: newSpinsToday,
               };
-
-              if (newSpinsToday >= MAX_SPINS_PER_DAY) {
-                  const newCooldownDate = new Date();
-                  newCooldownDate.setMinutes(newCooldownDate.getMinutes() + COOLDOWN_MINUTES);
-                  updates.spinsCooldownEnd = Timestamp.fromDate(newCooldownDate);
-              }
 
               transaction.update(userRef, updates);
 
@@ -363,16 +243,7 @@ export default function SpinToEarn() {
         </div>
       </CardHeader>
       <CardContent className="flex flex-col items-center justify-center space-y-4">
-        <Wheel rotation={rotation} onSpin={handleSpin} isSpinning={isSpinning} isAdRunning={isAdRunning} disabled={!canSpin} />
-        <div className="text-center text-muted-foreground">
-            { userProfileLoading ? <p>Loading spins...</p> : 
-                isSpinCooldownActive && spinsCooldownEnd ? (
-                    <CountdownTimer targetDate={spinsCooldownEnd} />
-                ) : (
-                    <p>You have <span className="font-bold text-foreground">{spinsLeft}</span> spins left.</p>
-                )
-            }
-        </div>
+        <Wheel rotation={rotation} onSpin={handleSpin} isSpinning={isSpinning} />
       </CardContent>
       <CardFooter>
         <Button

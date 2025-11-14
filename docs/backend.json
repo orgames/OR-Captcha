@@ -27,24 +27,6 @@
         "coinBalance": {
           "type": "number",
           "description": "The user's current ORA coin balance."
-        },
-        "spinsToday": {
-          "type": "number",
-          "description": "The number of times the user has spun the wheel today."
-        },
-        "spinsCooldownEnd": {
-          "type": "string",
-          "format": "date-time",
-          "description": "The timestamp when the spin cooldown period ends."
-        },
-        "scratchesToday": {
-          "type": "number",
-          "description": "The number of times the user has scratched a card today."
-        },
-        "scratchesCooldownEnd": {
-          "type": "string",
-          "format": "date-time",
-          "description": "The timestamp when the scratch cooldown period ends."
         }
       },
       "required": [

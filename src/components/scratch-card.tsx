@@ -14,12 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, collection, runTransaction, serverTimestamp, Timestamp } from "firebase/firestore";
+import { doc, collection, runTransaction, serverTimestamp } from "firebase/firestore";
 
 const scratchPrizes = [1, 5, 10, 2, 25, 0, 5, 2, 50, 0];
 const SCRATCH_RADIUS = 40;
-const MAX_SCRATCHES_PER_DAY = 20;
-const COOLDOWN_MINUTES = 60;
 
 const OraCoin = ({ className }: { className?: string }) => (
   <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -32,41 +30,6 @@ const OraCoinReward = ({ className }: { className?: string }) => (
     <span className="text-2xl font-bold text-accent-foreground">O</span>
   </div>
 );
-
-const CountdownTimer = ({ targetDate }: { targetDate: Date }) => {
-    const calculateTimeLeft = () => {
-        const difference = +targetDate - +new Date();
-        if (difference > 0) {
-            return {
-                minutes: Math.floor((difference / 1000 / 60) % 60),
-                seconds: Math.floor((difference / 1000) % 60),
-            };
-        }
-        return {};
-    };
-
-    const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
-
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setTimeLeft(calculateTimeLeft());
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [targetDate]);
-
-    const timerComponents = Object.entries(timeLeft);
-
-    return (
-        <div className="text-center font-mono">
-            {timerComponents.length ? (
-                 <span>Refills in {String(timeLeft.minutes).padStart(2, '0')}:{String(timeLeft.seconds).padStart(2, '0')}</span>
-            ) : (
-                <span>Ready to scratch!</span>
-            )}
-        </div>
-    );
-};
 
 export default function ScratchCard() {
   const { user } = useUser();
@@ -86,65 +49,14 @@ export default function ScratchCard() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
 
-  const scratchesToday = userProfile?.scratchesToday || 0;
-  const scratchesCooldownEnd = userProfile?.scratchesCooldownEnd?.toDate();
-  const now = new Date();
-
-  const isScratchCooldownActive = scratchesCooldownEnd && scratchesCooldownEnd > now;
-
-  useEffect(() => {
-    if (!firestore || !user || !userProfile) return;
-    if (isScratchCooldownActive || scratchesToday < MAX_SCRATCHES_PER_DAY) return;
-    
-    const userRef = doc(firestore, 'users', user.uid);
-    const newCooldownDate = new Date();
-    newCooldownDate.setMinutes(newCooldownDate.getMinutes() + COOLDOWN_MINUTES);
-    
-    runTransaction(firestore, async (transaction) => {
-        transaction.update(userRef, { scratchesCooldownEnd: Timestamp.fromDate(newCooldownDate) });
-    }).then(() => {
-        refetch();
-    });
-
-  }, [isScratchCooldownActive, scratchesToday, firestore, user, userProfile, refetch]);
-  
-  useEffect(() => {
-    if (!firestore || !user || !userProfile) return;
-    if (!isScratchCooldownActive && scratchesToday > 0) return;
-    if(isScratchCooldownActive && scratchesToday < MAX_SCRATCHES_PER_DAY) return;
-    if(!isScratchCooldownActive && scratchesToday === 0) return;
-
-    const userRef = doc(firestore, 'users', user.uid);
-    
-    runTransaction(firestore, async (transaction) => {
-      const userDoc = await transaction.get(userRef);
-      if (!userDoc.exists()) throw new Error("User not found");
-      
-      const docData = userDoc.data();
-      const currentCooldown = docData.scratchesCooldownEnd?.toDate();
-
-      if (currentCooldown && currentCooldown < new Date()) {
-        transaction.update(userRef, { scratchesToday: 0 });
-      }
-    }).then(() => {
-      refetch();
-    });
-
-  }, [isScratchCooldownActive, firestore, user, userProfile, scratchesToday, refetch]);
-
-  const scratchesLeft = isScratchCooldownActive ? 0 : MAX_SCRATCHES_PER_DAY - scratchesToday;
-  const canScratch = scratchesLeft > 0 && !userProfileLoading && !isScratchCooldownActive;
-
   const setupCanvas = (prize: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear previous state
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Set background prize
     ctx.fillStyle = 'hsl(var(--card))';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.font = 'bold 48px "PT Sans"';
@@ -153,7 +65,6 @@ export default function ScratchCard() {
     ctx.textBaseline = 'middle';
     ctx.fillText(prize > 0 ? `${prize} ORA` : 'Better Luck!', canvas.width / 2, canvas.height / 2);
 
-    // Set foreground scratch layer
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = 'hsl(var(--muted))';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -166,14 +77,7 @@ export default function ScratchCard() {
   };
   
   const handleGetNewCard = () => {
-    if (isGettingCard || !canScratch || !user || !firestore) {
-      if (!canScratch) {
-        toast({
-          title: "Scratch Limit Reached",
-          description: `You have used all ${MAX_SCRATCHES_PER_DAY} scratch cards. Please wait for the cooldown.`,
-          variant: "destructive",
-        });
-      }
+    if (isGettingCard || !user || !firestore) {
       return;
     }
 
@@ -189,30 +93,11 @@ export default function ScratchCard() {
             throw new Error("User document does not exist.");
           }
           
-          const currentScratches = userDoc.data().scratchesToday || 0;
-          const currentCooldown = userDoc.data().scratchesCooldownEnd?.toDate();
-          
-          if (currentCooldown && currentCooldown > new Date()) {
-            throw new Error("Scratches are on cooldown.");
-          }
-
-          if (currentScratches >= MAX_SCRATCHES_PER_DAY) {
-            throw new Error("Scratch limit reached.");
-          }
-
-          const newScratchesToday = currentScratches + 1;
           const newBalance = (userDoc.data().coinBalance || 0) + newPrize;
           
           const updates: any = {
-            scratchesToday: newScratchesToday,
             coinBalance: newBalance
           };
-
-          if (newScratchesToday >= MAX_SCRATCHES_PER_DAY) {
-              const newCooldownDate = new Date();
-              newCooldownDate.setMinutes(newCooldownDate.getMinutes() + COOLDOWN_MINUTES);
-              updates.scratchesCooldownEnd = Timestamp.fromDate(newCooldownDate);
-          }
 
           transaction.update(userRef, updates);
 
@@ -226,7 +111,6 @@ export default function ScratchCard() {
           }
         });
 
-        // After successful transaction
         setupCanvas(newPrize);
         if (newPrize > 0) {
             setAnimationTrigger(Date.now());
@@ -248,7 +132,7 @@ export default function ScratchCard() {
           description: "Could not get a new scratch card. Please try again.",
           variant: "destructive",
         });
-        setIsCardScratched(true); // Reset state on failure
+        setIsCardScratched(true);
         setPrizeAmount(null);
       } finally {
         refetch();
@@ -300,7 +184,6 @@ export default function ScratchCard() {
         const ctx = canvas.getContext('2d');
         if (ctx) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-             // Redraw prize
             ctx.fillStyle = 'hsl(var(--card))';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.font = 'bold 48px "PT Sans"';
@@ -348,7 +231,6 @@ export default function ScratchCard() {
     };
   };
 
-
   return (
     <Card className="w-full max-w-md shadow-lg relative overflow-visible">
       <CardHeader>
@@ -384,22 +266,13 @@ export default function ScratchCard() {
           onMouseDown={handleMouseDown}
           onTouchStart={handleTouchStart}
         />
-        <div className="text-center text-muted-foreground">
-            { userProfileLoading ? <p>Loading scratches...</p> : 
-                isScratchCooldownActive && scratchesCooldownEnd ? (
-                    <CountdownTimer targetDate={scratchesCooldownEnd} />
-                ) : (
-                    <p>You have <span className="font-bold text-foreground">{scratchesLeft}</span> scratches left.</p>
-                )
-            }
-        </div>
       </CardContent>
       <CardFooter>
         <Button
           variant="outline"
           className="w-full border-accent text-accent-foreground hover:bg-accent/20 hover:text-accent-foreground"
           onClick={handleGetNewCard}
-          disabled={isGettingCard || !isCardScratched || !canScratch}
+          disabled={isGettingCard || !isCardScratched}
         >
           {isGettingCard ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
