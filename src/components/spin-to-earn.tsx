@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, useTransition, useMemo } from "react";
@@ -81,8 +82,10 @@ const Wheel = ({ rotation }: { rotation: number }) => (
         })}
       </svg>
     </div>
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }}>
-       <div className="w-8 h-8 bg-destructive rounded-sm rotate-45" />
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-4 w-8 h-8 text-destructive">
+      <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" transform="rotate(180 12 12)"/>
+      </svg>
     </div>
   </div>
 );
@@ -152,13 +155,14 @@ export default function SpinToEarn() {
         const winningPrizeIndex = Math.floor(Math.random() * TOTAL_PRIZES);
         const prizeAmount = spinPrizes[winningPrizeIndex];
 
-        const baseRotations = 5; 
-        const prizeAngle = (360 / TOTAL_PRIZES) * (TOTAL_PRIZES - winningPrizeIndex);
-        const randomOffset = (Math.random() - 0.5) * (360 / TOTAL_PRIZES) * 0.8;
-        const newRotation = rotation + (baseRotations * 360) + prizeAngle + randomOffset;
+        const baseRotations = 5;
+        const segmentAngle = 360 / TOTAL_PRIZES;
+        const prizeAngle = 360 - (winningPrizeIndex * segmentAngle);
+        const randomOffset = (Math.random() - 0.5) * segmentAngle * 0.8;
+        const targetRotation = (baseRotations * 360) + prizeAngle + randomOffset;
 
-        setRotation(newRotation);
-
+        setRotation(targetRotation);
+        
         // Wait for spin animation to finish
         await new Promise(resolve => setTimeout(resolve, 5000));
         
