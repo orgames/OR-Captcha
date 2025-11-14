@@ -14,12 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, collection, setDoc, serverTimestamp, increment } from "firebase/firestore";
+import { doc, collection, setDoc, serverTimestamp, increment, runTransaction } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
 const scratchPrizes = [1, 5, 10, 2, 25, 0, 5, 2, 50, 0];
 const SCRATCH_RADIUS = 20;
+const MAX_SCRATCHES_PER_DAY = 20;
 
 const OraCoin = ({ className }: { className?: string }) => (
   <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -44,59 +45,24 @@ export default function ScratchCard() {
 
   const { data: userProfile, loading: userProfileLoading } = useDoc<any>(userDocRef?.path);
 
-  const [isRevealing, startRevealing] = useTransition();
+  const [isGettingCard, startGettingCard] = useTransition();
   const [animationTrigger, setAnimationTrigger] = useState(0);
-  const [prizeAmount, setPrizeAmount] = useState(0);
-  const [isCardScratched, setIsCardScratched] = useState(false);
+  const [prizeAmount, setPrizeAmount] = useState<number | null>(null);
+  const [isCardScratched, setIsCardScratched] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
 
-  const addTransaction = async (amount: number, type: 'scratch') => {
-    if (!user || !firestore || amount <= 0) return;
+  const scratchesLeft = userProfile ? MAX_SCRATCHES_PER_DAY - (userProfile.scratchesToday || 0) : 0;
+  const canScratch = scratchesLeft > 0 && !userProfileLoading;
 
-    const userRef = doc(firestore, 'users', user.uid);
-    const transactionsRef = collection(firestore, 'users', user.uid, 'transactions');
-    const newTransactionRef = doc(transactionsRef);
-
-    const transactionData = {
-      amount,
-      type,
-      timestamp: serverTimestamp(),
-    };
-
-    const userUpdate = setDoc(userRef, { coinBalance: increment(amount) }, { merge: true });
-    const transactionUpdate = setDoc(newTransactionRef, transactionData);
-
-    Promise.all([userUpdate, transactionUpdate]).catch((error) => {
-      if (error.code === 'permission-denied') {
-        const permissionError = new FirestorePermissionError({
-          path: userRef.path,
-          operation: 'update',
-          requestResourceData: { coinBalance: `increment(${amount})` },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        const permissionError2 = new FirestorePermissionError({
-          path: newTransactionRef.path,
-          operation: 'create',
-          requestResourceData: transactionData,
-        });
-        errorEmitter.emit('permission-error', permissionError2);
-      } else {
-        console.error("Transaction failed: ", error);
-        toast({
-          title: "An unexpected error occurred",
-          description: "Could not complete the transaction. Please try again.",
-          variant: "destructive",
-        });
-      }
-    });
-  };
-  
   const setupCanvas = (prize: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // Clear previous state
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Set background prize
     ctx.fillStyle = 'hsl(var(--card))';
@@ -105,7 +71,7 @@ export default function ScratchCard() {
     ctx.fillStyle = 'hsl(var(--accent))';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${prize} ORA`, canvas.width / 2, canvas.height / 2);
+    ctx.fillText(prize > 0 ? `${prize} ORA` : 'Better Luck!', canvas.width / 2, canvas.height / 2);
 
     // Set foreground scratch layer
     ctx.globalCompositeOperation = 'source-over';
@@ -119,15 +85,87 @@ export default function ScratchCard() {
     setIsCardScratched(false);
   };
   
-  const getNewCard = () => {
-    const newPrize = scratchPrizes[Math.floor(Math.random() * scratchPrizes.length)];
-    setPrizeAmount(newPrize);
-    setupCanvas(newPrize);
-  };
+  const handleGetNewCard = () => {
+    if (isGettingCard || !canScratch || !user || !firestore) {
+      if (!canScratch) {
+        toast({
+          title: "Scratch Limit Reached",
+          description: `You have used all ${MAX_SCRATCHES_PER_DAY} scratch cards for today. Come back tomorrow!`,
+          variant: "destructive",
+        });
+      }
+      return;
+    }
 
-  useEffect(() => {
-    getNewCard();
-  }, []);
+    startGettingCard(async () => {
+      const userRef = doc(firestore, 'users', user.uid);
+      const newPrize = scratchPrizes[Math.floor(Math.random() * scratchPrizes.length)];
+      setPrizeAmount(newPrize);
+
+      try {
+        await runTransaction(firestore, async (transaction) => {
+          const userDoc = await transaction.get(userRef);
+          if (!userDoc.exists()) {
+            throw new Error("User document does not exist.");
+          }
+
+          let newScratchesToday = userDoc.data().scratchesToday || 0;
+          const lastScratchDate = userDoc.data().lastScratchDate || new Date(0).toISOString().split('T')[0];
+          const today = new Date().toISOString().split('T')[0];
+
+          if (lastScratchDate !== today) {
+            newScratchesToday = 0;
+          }
+
+          if (newScratchesToday >= MAX_SCRATCHES_PER_DAY) {
+            throw new Error("Scratch limit reached for today.");
+          }
+
+          const newBalance = (userDoc.data().coinBalance || 0) + newPrize;
+
+          transaction.update(userRef, {
+            scratchesToday: newScratchesToday + 1,
+            lastScratchDate: today,
+            coinBalance: newBalance
+          });
+
+          if (newPrize > 0) {
+              const transactionRef = doc(collection(userRef, 'transactions'));
+              transaction.set(transactionRef, {
+                  type: 'scratch' as const,
+                  amount: newPrize,
+                  timestamp: serverTimestamp(),
+              });
+          }
+        });
+
+        // After successful transaction
+        setupCanvas(newPrize);
+        if (newPrize > 0) {
+            setAnimationTrigger(Date.now());
+             toast({
+                title: "You Won!",
+                description: `You've won ${newPrize} ORA coins.`,
+            });
+        } else {
+             toast({
+                title: "Better Luck Next Time!",
+                description: "You didn't win any coins this time. Try again!",
+            });
+        }
+
+      } catch (error: any) {
+        console.error("Transaction failed: ", error);
+        toast({
+          title: error.message || "An unexpected error occurred",
+          description: "Could not get a new scratch card. Please try again.",
+          variant: "destructive",
+        });
+        setIsCardScratched(true); // Reset state on failure
+        setPrizeAmount(null);
+      }
+    });
+  };
   
   const getScratchPercentage = () => {
     const canvas = canvasRef.current;
@@ -149,7 +187,7 @@ export default function ScratchCard() {
 
   const scratch = (x: number, y: number) => {
     const canvas = canvasRef.current;
-    if (!canvas || isCardScratched) return;
+    if (!canvas || isCardScratched || isGettingCard) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -167,39 +205,27 @@ export default function ScratchCard() {
   const revealCard = () => {
     if (isCardScratched) return;
     setIsCardScratched(true);
-    startRevealing(async () => {
-        const canvas = canvasRef.current;
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                 // Redraw prize
-                ctx.fillStyle = 'hsl(var(--card))';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.font = 'bold 48px "PT Sans"';
-                ctx.fillStyle = 'hsl(var(--accent))';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(`${prizeAmount} ORA`, canvas.width / 2, canvas.height / 2);
-            }
+    
+    const canvas = canvasRef.current;
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+             // Redraw prize
+            ctx.fillStyle = 'hsl(var(--card))';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = 'bold 48px "PT Sans"';
+            ctx.fillStyle = 'hsl(var(--accent))';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const currentPrize = prizeAmount ?? 0;
+            ctx.fillText(currentPrize > 0 ? `${currentPrize} ORA` : 'Better Luck!', canvas.width / 2, canvas.height / 2);
         }
-        if (prizeAmount > 0) {
-            await addTransaction(prizeAmount, 'scratch');
-            setAnimationTrigger(Date.now());
-            toast({
-                title: "You Won!",
-                description: `You've won ${prizeAmount} ORA coins.`,
-            });
-        } else {
-            toast({
-                title: "Better Luck Next Time!",
-                description: "You didn't win any coins this time. Try again!",
-            });
-        }
-    });
+    }
   }
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isCardScratched) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -215,6 +241,7 @@ export default function ScratchCard() {
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (isCardScratched) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -264,22 +291,25 @@ export default function ScratchCard() {
           ref={canvasRef}
           width="350"
           height="150"
-          className="rounded-md border-2 border-dashed border-muted-foreground cursor-grab active:cursor-grabbing"
+          className={`rounded-md border-2 border-dashed border-muted-foreground ${!isCardScratched ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
           onMouseDown={handleMouseDown}
           onTouchStart={handleTouchStart}
         />
+        <div className="text-center text-muted-foreground">
+            { userProfileLoading ? <p>Loading scratches...</p> : <p>You have <span className="font-bold text-foreground">{scratchesLeft}</span> scratches left today.</p> }
+        </div>
       </CardContent>
       <CardFooter>
         <Button
           variant="outline"
           className="w-full border-accent text-accent-foreground hover:bg-accent/20 hover:text-accent-foreground"
-          onClick={getNewCard}
-          disabled={isRevealing}
+          onClick={handleGetNewCard}
+          disabled={isGettingCard || !isCardScratched || !canScratch}
         >
-          {isRevealing ? (
+          {isGettingCard ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : null}
-          {isCardScratched ? "Play Again" : "Get New Card"}
+          Get New Card
         </Button>
       </CardFooter>
     </Card>

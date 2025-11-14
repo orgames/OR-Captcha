@@ -36,6 +36,15 @@
           "type": "string",
           "format": "date",
           "description": "The date of the user's last spin (YYYY-MM-DD)."
+        },
+        "scratchesToday": {
+          "type": "number",
+          "description": "The number of times the user has scratched a card today."
+        },
+        "lastScratchDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date of the user's last scratch (YYYY-MM-DD)."
         }
       },
       "required": [

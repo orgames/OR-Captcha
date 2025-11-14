@@ -55,6 +55,8 @@ export function useUser(): UseUserReturn {
             photoURL: string | null;
             spinsToday?: number;
             lastSpinDate?: string;
+            scratchesToday?: number;
+            lastScratchDate?: string;
             coinBalance?: number;
           } = {
             uid: user.uid,
@@ -64,9 +66,12 @@ export function useUser(): UseUserReturn {
           };
 
           if (!userDoc.exists()) {
+            const today = new Date().toISOString().split('T')[0];
             userData.coinBalance = 0;
             userData.spinsToday = 0;
-            userData.lastSpinDate = new Date().toISOString().split('T')[0];
+            userData.lastSpinDate = today;
+            userData.scratchesToday = 0;
+            userData.lastScratchDate = today;
             
             setDoc(userRef, userData, { merge: true }).catch((serverError) => {
               const permissionError = new FirestorePermissionError({
@@ -77,11 +82,28 @@ export function useUser(): UseUserReturn {
               errorEmitter.emit('permission-error', permissionError);
             });
           } else {
-            setDoc(userRef, userData, { merge: true }).catch((serverError) => {
+            // Ensure existing users have the new fields if they are missing
+            const existingData = userDoc.data();
+            const updates: any = {};
+            if (!('spinsToday' in existingData) || !('lastSpinDate' in existingData)) {
+                updates.spinsToday = 0;
+                updates.lastSpinDate = new Date(0).toISOString().split('T')[0];
+            }
+            if (!('scratchesToday' in existingData) || !('lastScratchDate' in existingData)) {
+                updates.scratchesToday = 0;
+                updates.lastScratchDate = new Date(0).toISOString().split('T')[0];
+            }
+            // Add core user data to the updates
+            updates.uid = user.uid;
+            updates.email = user.email;
+            updates.displayName = user.displayName;
+            updates.photoURL = user.photoURL;
+
+            setDoc(userRef, updates, { merge: true }).catch((serverError) => {
                const permissionError = new FirestorePermissionError({
                 path: userRef.path,
                 operation: 'update',
-                requestResourceData: userData,
+                requestResourceData: updates,
               }, auth.currentUser);
               errorEmitter.emit('permission-error', permissionError);
             });
