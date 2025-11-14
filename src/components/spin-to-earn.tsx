@@ -71,7 +71,7 @@ const Wheel = ({ rotation, onSpin, isSpinning, isAdRunning }: { rotation: number
           const textX = 100 + 70 * Math.cos(textAngle);
           const textY = 100 + 70 * Math.sin(textAngle);
           
-          const prizeText = prize === 0 && i === 2 ? "Better Luck" : prize;
+          const prizeText = prize === 0 && i === 2 ? "Miss" : prize;
 
           return (
             <g key={i}>
