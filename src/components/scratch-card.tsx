@@ -20,7 +20,7 @@ import { format } from "date-fns";
 const scratchPrizes = [1, 5, 10, 2, 25, 0, 5, 2, 50, 0];
 const SCRATCH_RADIUS = 40;
 const DAILY_SCRATCH_LIMIT = 20;
-const COINS_PER_AD = 25;
+const COINS_PER_AD = 0.5;
 
 const OraCoin = ({ className }: { className?: string }) => (
   <div className={`w-8 h-8 rounded-full bg-accent flex items-center justify-center ${className}`}>
@@ -423,5 +423,7 @@ export default function ScratchCard() {
     </Card>
   );
 }
+
+    
 
     

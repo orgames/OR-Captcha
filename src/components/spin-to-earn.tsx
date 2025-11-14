@@ -23,7 +23,7 @@ import { format } from "date-fns";
 const spinPrizes = [1, 2, 0, 1, 2, 3, 1, 0];
 const TOTAL_PRIZES = spinPrizes.length;
 const DAILY_SPIN_LIMIT = 20;
-const COINS_PER_AD = 25;
+const COINS_PER_AD = 0.5;
 
 
 const OraCoin = ({ className }: { className?: string }) => (
@@ -358,5 +358,7 @@ export default function SpinToEarn() {
     </Card>
   );
 }
+
+    
 
     
