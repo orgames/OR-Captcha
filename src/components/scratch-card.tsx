@@ -17,7 +17,7 @@ import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, runTransaction, serverTimestamp, Timestamp } from "firebase/firestore";
 
 const scratchPrizes = [1, 5, 10, 2, 25, 0, 5, 2, 50, 0];
-const SCRATCH_RADIUS = 20;
+const SCRATCH_RADIUS = 40;
 const MAX_SCRATCHES_PER_DAY = 20;
 const COOLDOWN_MINUTES = 60;
 
@@ -36,7 +36,7 @@ const OraCoinReward = ({ className }: { className?: string }) => (
 const CountdownTimer = ({ targetDate }: { targetDate: Date }) => {
     const calculateTimeLeft = () => {
         const difference = +targetDate - +new Date();
-        let timeLeft = {};
+        let timeLeft: { minutes?: number; seconds?: number } = {};
 
         if (difference > 0) {
             timeLeft = {
@@ -54,14 +54,14 @@ const CountdownTimer = ({ targetDate }: { targetDate: Date }) => {
             setTimeLeft(calculateTimeLeft());
         }, 1000);
         return () => clearTimeout(timer);
-    });
+    }, [timeLeft, targetDate]);
 
     const timerComponents = Object.entries(timeLeft);
 
     return (
         <div className="text-center font-mono">
             {timerComponents.length ? (
-                 <span>Refills in {String(timerComponents[0][1]).padStart(2, '0')}:{String(timerComponents[1][1]).padStart(2, 'O')}</span>
+                 <span>Refills in {String(timeLeft.minutes).padStart(2, '0')}:{String(timeLeft.seconds).padStart(2, '0')}</span>
             ) : (
                 <span>Ready to scratch!</span>
             )}

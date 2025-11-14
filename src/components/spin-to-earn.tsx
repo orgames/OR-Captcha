@@ -42,7 +42,7 @@ const OraCoinReward = ({ className }: { className?: string }) => (
 const CountdownTimer = ({ targetDate }: { targetDate: Date }) => {
     const calculateTimeLeft = () => {
         const difference = +targetDate - +new Date();
-        let timeLeft = {};
+        let timeLeft: { minutes?: number; seconds?: number } = {};
 
         if (difference > 0) {
             timeLeft = {
@@ -60,14 +60,14 @@ const CountdownTimer = ({ targetDate }: { targetDate: Date }) => {
             setTimeLeft(calculateTimeLeft());
         }, 1000);
         return () => clearTimeout(timer);
-    });
+    }, [timeLeft, targetDate]);
 
     const timerComponents = Object.entries(timeLeft);
 
     return (
         <div className="text-center font-mono">
             {timerComponents.length ? (
-                 <span>Refills in {String(timerComponents[0][1]).padStart(2, '0')}:{String(timerComponents[1][1]).padStart(2, '0')}</span>
+                 <span>Refills in {String(timeLeft.minutes).padStart(2, '0')}:{String(timeLeft.seconds).padStart(2, '0')}</span>
             ) : (
                 <span>Ready to spin!</span>
             )}
